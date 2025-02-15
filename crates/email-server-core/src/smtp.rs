@@ -16,7 +16,8 @@ impl SocketHandler for SmtpServer {
             loop {
                 let mut buf = [0; 1024];
                 let n = stream.read(&mut buf).await?;
-                println!("Received {}", String::from_utf8_lossy(&buf));
+                let command = SmtpCommand::from_bytes(&buf[..n]);
+                println!("Received {:?}", command);
                 if n == 0 {
                     break;
                 }
@@ -24,5 +25,38 @@ impl SocketHandler for SmtpServer {
             }
             Ok(())
         })
+    }
+}
+
+#[derive(Debug)]
+pub enum SmtpCommand {
+    Unknown,
+    Helo(String),
+    MailFrom(String),
+    RcptTo(String),
+    Data(Vec<u8>),
+}
+
+impl SmtpCommand {
+    pub fn from_bytes(bytes: &[u8]) -> SmtpCommand {
+        let mut parts = bytes.split(|&b| b == b' ');
+        match parts.next() {
+            Some(b"HELO") => {
+                let domain = parts.next().unwrap_or(&[]).to_vec();
+                SmtpCommand::Helo(String::from_utf8_lossy(&domain).to_string())
+            }
+            Some(b"MAIL") => {
+                let from = parts.next().unwrap_or(&[]).to_vec();
+                SmtpCommand::MailFrom(String::from_utf8_lossy(&from).to_string())
+            }
+            Some(b"RCPT") => {
+                let to = parts.next().unwrap_or(&[]).to_vec();
+                SmtpCommand::RcptTo(String::from_utf8_lossy(&to).to_string())
+            }
+            Some(b"DATA") => {
+                SmtpCommand::Data(parts.next().unwrap_or(&[]).to_vec())
+            }
+            _ => SmtpCommand::Unknown,
+        }
     }
 }
