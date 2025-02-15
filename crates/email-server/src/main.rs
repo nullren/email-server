@@ -3,17 +3,15 @@ use clap::Parser;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    #[arg(short, long, default_value = "World")]
-    name: String,
-
-    #[arg(short, long, default_value_t = 1)]
-    count: u8,
+    #[arg(env, long, default_value = "0.0.0.0:25")]
+    smtp_listen_address: String,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let args = Args::parse();
 
-    for _ in 0..args.count {
-        println!("Hello, {}!", args.name);
-    }
+    email_server_core::socket::start_smtp_server(&args.smtp_listen_address)
+        .await
+        .unwrap();
 }
