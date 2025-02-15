@@ -11,7 +11,7 @@ struct Args {
 async fn main() {
     let args = Args::parse();
 
-    email_server_core::socket::start_smtp_server(&args.smtp_listen_address)
+    email_server_core::smtp_server(&args.smtp_listen_address)
         .await
         .unwrap();
 }
