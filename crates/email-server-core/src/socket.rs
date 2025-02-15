@@ -12,6 +12,7 @@ use tokio::time::Instant;
 pub enum SocketError {
     BindFailed(std::io::Error),
     ConnectionFailed(std::io::Error),
+    IoError(std::io::Error),
     Closed,
 }
 
@@ -20,12 +21,19 @@ impl Display for SocketError {
         match self {
             SocketError::BindFailed(e) => write!(f, "BindFailed: {}", e),
             SocketError::ConnectionFailed(e) => write!(f, "ConnectionFailed: {}", e),
+            SocketError::IoError(e) => write!(f, "IoError: {}", e),
             SocketError::Closed => write!(f, "Closed"),
         }
     }
 }
 
 impl Error for SocketError {}
+
+impl From<std::io::Error> for SocketError {
+    fn from(e: std::io::Error) -> Self {
+        SocketError::IoError(e)
+    }
+}
 
 pub trait SocketHandler {
     type Future: Future<Output = Result<(), SocketError>>;
