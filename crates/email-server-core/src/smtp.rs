@@ -12,7 +12,7 @@ impl SocketHandler for SmtpServer {
 
     fn handle_connection(&mut self, mut stream: TcpStream) -> Self::Future {
         Box::pin(async move {
-            stream.write(b"220 Welcome to the SMTP server\r\n").await?;
+            stream.write_all(b"220 Welcome to the SMTP server\r\n").await?;
             loop {
                 let mut buf = [0; 1024];
                 let n = stream.read(&mut buf).await?;
@@ -20,7 +20,7 @@ impl SocketHandler for SmtpServer {
                 if n == 0 {
                     break;
                 }
-                stream.write(b"503 Bad sequence of commands\r\n").await?;
+                stream.write_all(b"503 Bad sequence of commands\r\n").await?;
             }
             Ok(())
         })
