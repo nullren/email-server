@@ -1,5 +1,5 @@
-use crate::smtp::state;
 use crate::smtp::state::Message;
+use crate::smtp::{state, status};
 use crate::socket::{SocketError, SocketHandler};
 use bytes::BytesMut;
 use std::future::Future;
@@ -63,7 +63,7 @@ impl Server {
         mut stream: TcpStream,
     ) -> Pin<Box<dyn Future<Output = Result<(), SocketError>> + Send>> {
         Box::pin(async move {
-            outln!(stream, "220 {} ESMTP ready", "mail.humphreyway.com");
+            outln!(stream, status::Code::ServiceReady);
             let mut message = Message::default();
             let mut state = state::new_state();
             let mut buffer = BytesMut::with_capacity(4096);
@@ -79,7 +79,7 @@ impl Server {
                 while let Some(pos) = buffer.windows(2).position(|x| x == b"\r\n") {
                     let buf = buffer.split_to(pos + 2);
                     if !state.is_data_collect() && buf.starts_with(b"QUIT") {
-                        outln!(stream, "221 Goodbye");
+                        outln!(stream, status::Code::Goodbye);
                         break 'outer;
                     }
 

@@ -1,3 +1,4 @@
+use crate::smtp::status;
 use derive_builder::Builder;
 
 pub trait SmtpState: Send {
@@ -37,11 +38,11 @@ impl SmtpState for InitState {
         if line.starts_with(b"HELO") {
             message.sender_domain = String::from_utf8_lossy(&line[5..]).trim().to_string();
             (
-                Some("250 mail.humphreyway.com is my domain name".to_string()),
+                Some(status::Code::Helo.to_string()),
                 Some(Box::new(MailState)),
             )
         } else {
-            (Some("503 Bad sequence of commands".to_string()), None)
+            (Some(status::Code::BadSequence.to_string()), None)
         }
     }
 }
@@ -55,9 +56,12 @@ impl SmtpState for MailState {
     ) -> (Option<String>, Option<Box<dyn SmtpState>>) {
         if line.starts_with(b"MAIL FROM:") {
             message.from = String::from_utf8_lossy(&line[10..]).trim().to_string();
-            (Some("250 OK".to_string()), Some(Box::new(RcptState)))
+            (
+                Some(status::Code::Ok.to_string()),
+                Some(Box::new(RcptState)),
+            )
         } else {
-            (Some("503 Bad sequence of commands".to_string()), None)
+            (Some(status::Code::BadSequence.to_string()), None)
         }
     }
 }
