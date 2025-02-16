@@ -19,14 +19,14 @@ impl Display for Code {
         match self {
             Code::ServiceReady => write!(f, "220 Service ready"),
             Code::StartTLS => write!(f, "220 Start TLS"),
+            Code::Goodbye => write!(f, "221 Goodbye"),
+            Code::Helo => write!(f, "250 mail.example.com"),
             Code::Ok => write!(f, "250 OK"),
+            Code::MessageSent => write!(f, "250 Message sent"),
+            Code::EnterMessage => write!(f, "354 enter mail, end with line containing only \".\""),
+            Code::BadSequence => write!(f, "503 Bad sequence of commands"),
             Code::EncRequired => write!(f, "530 Encryption required"),
             Code::AuthRequired => write!(f, "530 Authentication required"),
-            Code::Goodbye => write!(f, "221 Goodbye"),
-            Code::BadSequence => write!(f, "503 Bad sequence of commands"),
-            Code::Helo => write!(f, "250 mail.example.com"),
-            Code::EnterMessage => write!(f, "354 enter mail, end with line containing only \".\""),
-            Code::MessageSent => write!(f, "250 Message sent"),
         }
     }
 }
