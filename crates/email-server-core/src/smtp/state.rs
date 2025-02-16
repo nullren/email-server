@@ -23,7 +23,7 @@ pub struct SmtpMessageReader {
 }
 
 impl SmtpMessageReader {
-    pub fn read(&mut self, line: &[u8]) -> Result<Option<&str>, &str> {
+    pub fn read(&mut self, line: &[u8]) -> Result<Option<&'static str>, &'static str> {
         let command = crate::smtp::command::Command::from_bytes(line);
 
         match self.state {

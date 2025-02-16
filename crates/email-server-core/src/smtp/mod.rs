@@ -27,27 +27,59 @@ impl SocketHandler for SmtpServer {
                 if n == 0 {
                     break;
                 }
-                if state.state != SmtpState::Data && buf.starts_with(b"QUIT") {
-                    stream.write_all(b"221 Goodbye\r\n").await?;
-                    break;
-                }
-                match state.read(&buf[..n]) {
-                    Ok(Some(output)) => {
-                        stream
-                            .write_all(format!("{}\r\n", output).as_bytes())
-                            .await?;
+
+                match state.state {
+                    SmtpState::Data => {
+                        // Handle data collection
+                        if let Some(response) = handle_data(&mut state, &buf[..n]) {
+                            stream
+                                .write_all(format!("{}\r\n", response).as_bytes())
+                                .await?;
+                        }
                     }
-                    Ok(None) => {}
-                    Err(e) => {
-                        stream.write_all(format!("{}\r\n", e).as_bytes()).await?;
+                    _ => {
+                        // Handle command parsing
+                        if let Some(response) = handle_command(&mut state, &buf[..n]) {
+                            stream
+                                .write_all(format!("{}\r\n", response).as_bytes())
+                                .await?;
+                        }
                     }
                 }
+
                 if state.state == SmtpState::Done {
+                    // Process the completed message
                     // self.message_queue.push(state.message);
                     state = SmtpMessageReader::default();
                 }
             }
             Ok(())
         })
+    }
+}
+
+fn handle_command(state: &mut SmtpMessageReader, line: &[u8]) -> Option<&'static str> {
+    if line.starts_with(b"QUIT") {
+        return Some("221 Goodbye");
+    }
+
+    match state.read(line) {
+        Ok(Some(output)) => Some(output),
+        Ok(None) => None,
+        Err(e) => Some(e),
+    }
+}
+
+fn handle_data(state: &mut SmtpMessageReader, line: &[u8]) -> Option<&'static str> {
+    if line == b".\r\n" {
+        state.state = SmtpState::Done;
+        Some("250 Mail Delivered")
+    } else {
+        if line.starts_with(b"..") {
+            state.message.data.extend_from_slice(&line[1..]);
+        } else {
+            state.message.data.extend_from_slice(line);
+        }
+        None
     }
 }
