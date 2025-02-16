@@ -11,9 +11,42 @@ use tokio::net::TcpStream;
 pub struct Server {}
 
 impl SocketHandler for Server {
-    type Future = Pin<Box<dyn Future<Output = Result<(), SocketError>> + Send>>;
+    type Future = Pin<Box<dyn Future<Output=Result<(), SocketError>> + Send>>;
 
     fn handle_connection(&mut self, mut stream: TcpStream) -> Self::Future {
+        let mut this = self.clone();
+        Box::pin(async move {
+            stream
+                .write_all(b"220 Welcome to the SMTP server\r\n")
+                .await?;
+            
+            this.handle_tls_connection(stream).await
+            
+            // EHLO
+            //    250-mail.example.com
+            //    250-STARTTLS
+            
+            // NOOP
+            //    250 OK
+            
+            // QUIT
+            //    221 Goodbye
+            
+            // STARTTLS
+            //    220 Ready to start TLS
+            //    501 Syntax error (no parameters allowed)
+            //    454 TLS not available due to temporary reason
+
+            //    530 Must issue a STARTTLS command first
+            // unless NOOP, EHLO, STARTTLS, or QUIT
+            
+            // Ok(())
+        })
+    }
+}
+
+impl Server {
+    fn handle_tls_connection(&mut self, mut stream: TcpStream) -> Pin<Box<dyn Future<Output=Result<(), SocketError>> + Send>> {
         Box::pin(async move {
             stream
                 .write_all(b"220 Welcome to the SMTP server\r\n")
