@@ -1,5 +1,5 @@
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
-pub enum SmtpState {
+pub enum State {
     #[default]
     Init,
     Mail,
@@ -9,7 +9,7 @@ pub enum SmtpState {
 }
 
 #[derive(Default, Debug, Clone)]
-pub struct SmtpMessage {
+pub struct Message {
     pub sender_domain: String,
     pub from: String,
     pub to: Vec<String>,
@@ -17,46 +17,46 @@ pub struct SmtpMessage {
 }
 
 #[derive(Default, Debug, Clone)]
-pub struct SmtpMessageReader {
-    pub message: SmtpMessage,
-    pub state: SmtpState,
+pub struct MessageReader {
+    pub message: Message,
+    pub state: State,
 }
 
-impl SmtpMessageReader {
+impl MessageReader {
     pub fn read(&mut self, line: &[u8]) -> Result<Option<&'static str>, &'static str> {
         let command = crate::smtp::command::Command::from_bytes(line);
 
         match self.state {
-            SmtpState::Init => match command {
+            State::Init => match command {
                 crate::smtp::command::Command::Helo(domain) => {
                     self.message.sender_domain = domain;
-                    self.state = SmtpState::Mail;
+                    self.state = State::Mail;
                     Ok(Some("250 mail.humphreyway.com is my domain name"))
                 }
                 _ => Err("503 Bad sequence of commands"),
             },
-            SmtpState::Mail => match command {
+            State::Mail => match command {
                 crate::smtp::command::Command::MailFrom(from) => {
                     self.message.from = from;
-                    self.state = SmtpState::Rcpt;
+                    self.state = State::Rcpt;
                     Ok(Some("250 OK"))
                 }
                 _ => Err("503 Bad sequence of commands"),
             },
-            SmtpState::Rcpt => match command {
+            State::Rcpt => match command {
                 crate::smtp::command::Command::RcptTo(to) => {
                     self.message.to.push(to);
                     Ok(Some("250 OK"))
                 }
                 crate::smtp::command::Command::Data => {
-                    self.state = SmtpState::Data;
+                    self.state = State::Data;
                     Ok(Some("354 Enter mail body. End new line with just a '.'"))
                 }
                 _ => Err("503 Bad sequence of commands"),
             },
-            SmtpState::Data => {
+            State::Data => {
                 if line == b".\r\n" {
-                    self.state = SmtpState::Done;
+                    self.state = State::Done;
                     Ok(Some("250 Mail Delivered"))
                 } else if line.starts_with(b"..") {
                     self.message.data.extend_from_slice(&line[1..]);
@@ -77,24 +77,24 @@ mod tests {
 
     #[test]
     fn test_smtp_state_transitions() {
-        let mut reader = SmtpMessageReader::default();
+        let mut reader = MessageReader::default();
 
         // Initial state should be Init
-        assert_eq!(reader.state, SmtpState::Init);
+        assert_eq!(reader.state, State::Init);
 
         // Transition from Init to Mail
         assert_eq!(
             reader.read(b"HELO example.com"),
             Ok(Some("250 mail.humphreyway.com is my domain name"))
         );
-        assert_eq!(reader.state, SmtpState::Mail);
+        assert_eq!(reader.state, State::Mail);
 
         // Transition from Mail to Rcpt
         assert_eq!(
             reader.read(b"MAIL FROM: <user@example.com>"),
             Ok(Some("250 OK"))
         );
-        assert_eq!(reader.state, SmtpState::Rcpt);
+        assert_eq!(reader.state, State::Rcpt);
 
         // Add a recipient
         assert_eq!(
@@ -107,11 +107,11 @@ mod tests {
             reader.read(b"DATA"),
             Ok(Some("354 Enter mail body. End new line with just a '.'"))
         );
-        assert_eq!(reader.state, SmtpState::Data);
+        assert_eq!(reader.state, State::Data);
 
         // Handle data input
         assert_eq!(reader.read(b"Hello, World!\r\n"), Ok(None));
         assert_eq!(reader.read(b".\r\n"), Ok(Some("250 Mail Delivered")));
-        assert_eq!(reader.state, SmtpState::Done);
+        assert_eq!(reader.state, State::Done);
     }
 }

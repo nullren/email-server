@@ -7,12 +7,12 @@ use tokio::net::TcpStream;
 pub mod command;
 pub mod state;
 
-use state::{SmtpMessageReader, SmtpState};
+use state::{MessageReader, State};
 
 #[derive(Clone)]
-pub struct SmtpServer {}
+pub struct Server {}
 
-impl SocketHandler for SmtpServer {
+impl SocketHandler for Server {
     type Future = Pin<Box<dyn Future<Output = Result<(), SocketError>> + Send>>;
 
     fn handle_connection(&mut self, mut stream: TcpStream) -> Self::Future {
@@ -20,7 +20,7 @@ impl SocketHandler for SmtpServer {
             stream
                 .write_all(b"220 Welcome to the SMTP server\r\n")
                 .await?;
-            let mut state = SmtpMessageReader::default();
+            let mut state = MessageReader::default();
             loop {
                 let mut buf = [0; 1024];
                 let n = stream.read(&mut buf).await?;
@@ -29,7 +29,7 @@ impl SocketHandler for SmtpServer {
                 }
 
                 match state.state {
-                    SmtpState::Data => {
+                    State::Data => {
                         // Handle data collection
                         if let Some(response) = handle_data(&mut state, &buf[..n]) {
                             stream
@@ -47,10 +47,10 @@ impl SocketHandler for SmtpServer {
                     }
                 }
 
-                if state.state == SmtpState::Done {
+                if state.state == State::Done {
                     // Process the completed message
                     // self.message_queue.push(state.message);
-                    state = SmtpMessageReader::default();
+                    state = MessageReader::default();
                 }
             }
             Ok(())
@@ -58,7 +58,7 @@ impl SocketHandler for SmtpServer {
     }
 }
 
-fn handle_command(state: &mut SmtpMessageReader, line: &[u8]) -> Option<&'static str> {
+fn handle_command(state: &mut MessageReader, line: &[u8]) -> Option<&'static str> {
     if line.starts_with(b"QUIT") {
         return Some("221 Goodbye");
     }
@@ -70,9 +70,9 @@ fn handle_command(state: &mut SmtpMessageReader, line: &[u8]) -> Option<&'static
     }
 }
 
-fn handle_data(state: &mut SmtpMessageReader, line: &[u8]) -> Option<&'static str> {
+fn handle_data(state: &mut MessageReader, line: &[u8]) -> Option<&'static str> {
     if line == b".\r\n" {
-        state.state = SmtpState::Done;
+        state.state = State::Done;
         Some("250 Mail Delivered")
     } else {
         if line.starts_with(b"..") {
