@@ -70,3 +70,48 @@ impl SmtpMessageReader {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_smtp_state_transitions() {
+        let mut reader = SmtpMessageReader::default();
+
+        // Initial state should be Init
+        assert_eq!(reader.state, SmtpState::Init);
+
+        // Transition from Init to Mail
+        assert_eq!(
+            reader.read(b"HELO example.com"),
+            Ok(Some("250 mail.humphreyway.com is my domain name"))
+        );
+        assert_eq!(reader.state, SmtpState::Mail);
+
+        // Transition from Mail to Rcpt
+        assert_eq!(
+            reader.read(b"MAIL FROM: <user@example.com>"),
+            Ok(Some("250 OK"))
+        );
+        assert_eq!(reader.state, SmtpState::Rcpt);
+
+        // Add a recipient
+        assert_eq!(
+            reader.read(b"RCPT TO: <recipient@example.com>"),
+            Ok(Some("250 OK"))
+        );
+
+        // Transition from Rcpt to Data
+        assert_eq!(
+            reader.read(b"DATA"),
+            Ok(Some("354 Enter mail body. End new line with just a '.'"))
+        );
+        assert_eq!(reader.state, SmtpState::Data);
+
+        // Handle data input
+        assert_eq!(reader.read(b"Hello, World!\r\n"), Ok(None));
+        assert_eq!(reader.read(b".\r\n"), Ok(Some("250 Mail Delivered")));
+        assert_eq!(reader.state, SmtpState::Done);
+    }
+}

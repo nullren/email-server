@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum Command {
     Helo(String),
     MailFrom(String),
@@ -23,5 +23,29 @@ impl Command {
         } else {
             Command::Unknown
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_command_parsing() {
+        assert_eq!(
+            Command::from_bytes(b"HELO example.com"),
+            Command::Helo("example.com".to_string())
+        );
+        assert_eq!(
+            Command::from_bytes(b"MAIL FROM: <user@example.com>"),
+            Command::MailFrom("<user@example.com>".to_string())
+        );
+        assert_eq!(
+            Command::from_bytes(b"RCPT TO: <recipient@example.com>"),
+            Command::RcptTo("<recipient@example.com>".to_string())
+        );
+        assert_eq!(Command::from_bytes(b"DATA"), Command::Data);
+        assert_eq!(Command::from_bytes(b"QUIT"), Command::Quit);
+        assert_eq!(Command::from_bytes(b"UNKNOWN"), Command::Unknown);
     }
 }
