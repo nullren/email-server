@@ -5,7 +5,7 @@ pub trait SmtpState: Send {
         &mut self,
         line: &[u8],
         message: &mut Message,
-    ) -> (Option<&'static str>, Option<Box<dyn SmtpState>>);
+    ) -> (Option<String>, Option<Box<dyn SmtpState>>);
     fn is_data_collect(&self) -> bool {
         false
     }
@@ -33,15 +33,15 @@ impl SmtpState for InitState {
         &mut self,
         line: &[u8],
         message: &mut Message,
-    ) -> (Option<&'static str>, Option<Box<dyn SmtpState>>) {
+    ) -> (Option<String>, Option<Box<dyn SmtpState>>) {
         if line.starts_with(b"HELO") {
             message.sender_domain = String::from_utf8_lossy(&line[5..]).trim().to_string();
             (
-                Some("250 mail.humphreyway.com is my domain name"),
+                Some("250 mail.humphreyway.com is my domain name".to_string()),
                 Some(Box::new(MailState)),
             )
         } else {
-            (Some("503 Bad sequence of commands"), None)
+            (Some("503 Bad sequence of commands".to_string()), None)
         }
     }
 }
@@ -52,12 +52,12 @@ impl SmtpState for MailState {
         &mut self,
         line: &[u8],
         message: &mut Message,
-    ) -> (Option<&'static str>, Option<Box<dyn SmtpState>>) {
+    ) -> (Option<String>, Option<Box<dyn SmtpState>>) {
         if line.starts_with(b"MAIL FROM:") {
             message.from = String::from_utf8_lossy(&line[10..]).trim().to_string();
-            (Some("250 OK"), Some(Box::new(RcptState)))
+            (Some("250 OK".to_string()), Some(Box::new(RcptState)))
         } else {
-            (Some("503 Bad sequence of commands"), None)
+            (Some("503 Bad sequence of commands".to_string()), None)
         }
     }
 }
@@ -68,19 +68,19 @@ impl SmtpState for RcptState {
         &mut self,
         line: &[u8],
         message: &mut Message,
-    ) -> (Option<&'static str>, Option<Box<dyn SmtpState>>) {
+    ) -> (Option<String>, Option<Box<dyn SmtpState>>) {
         if line.starts_with(b"RCPT TO:") {
             message
                 .to
                 .push(String::from_utf8_lossy(&line[8..]).trim().to_string());
-            (Some("250 OK"), Some(Box::new(RcptState)))
+            (Some("250 OK".to_string()), Some(Box::new(RcptState)))
         } else if line == b"DATA\r\n" {
             (
-                Some("354 Start mail input; end with <CRLF>.<CRLF>"),
+                Some("354 Start mail input; end with <CRLF>.<CRLF>".to_string()),
                 Some(Box::new(DataCollectState)),
             )
         } else {
-            (Some("503 Bad sequence of commands"), None)
+            (Some("503 Bad sequence of commands".to_string()), None)
         }
     }
 }
@@ -91,9 +91,12 @@ impl SmtpState for DataCollectState {
         &mut self,
         line: &[u8],
         message: &mut Message,
-    ) -> (Option<&'static str>, Option<Box<dyn SmtpState>>) {
+    ) -> (Option<String>, Option<Box<dyn SmtpState>>) {
         if line == b".\r\n" {
-            (Some("250 Mail Delivered"), Some(Box::new(DoneState)))
+            (
+                Some("250 Mail Delivered".to_string()),
+                Some(Box::new(DoneState)),
+            )
         } else {
             message.data.extend_from_slice(line);
             (None, None)
@@ -110,8 +113,8 @@ impl SmtpState for DoneState {
         &mut self,
         _line: &[u8],
         _message: &mut Message,
-    ) -> (Option<&'static str>, Option<Box<dyn SmtpState>>) {
-        (Some("503 Bad sequence of commands"), None)
+    ) -> (Option<String>, Option<Box<dyn SmtpState>>) {
+        (Some("503 Bad sequence of commands".to_string()), None)
     }
     fn is_done(&self) -> bool {
         true
@@ -127,7 +130,10 @@ mod tests {
         let mut msg = Message::default();
         let mut state = InitState {};
         let (resp, next) = state.process_line(b"HELO example.com\r\n", &mut msg);
-        assert_eq!(resp, Some("250 mail.humphreyway.com is my domain name"));
+        assert_eq!(
+            resp,
+            Some("250 mail.humphreyway.com is my domain name".to_string())
+        );
         assert_eq!(msg.sender_domain, "example.com");
         assert!(next.is_some());
     }
@@ -137,7 +143,7 @@ mod tests {
         let mut msg = Message::default();
         let mut state = MailState {};
         let (resp, next) = state.process_line(b"MAIL FROM: <sender@example>\r\n", &mut msg);
-        assert_eq!(resp, Some("250 OK"));
+        assert_eq!(resp, Some("250 OK".to_string()));
         assert_eq!(msg.from, "<sender@example>");
         assert!(next.is_some());
     }
@@ -147,7 +153,7 @@ mod tests {
         let mut msg = Message::default();
         let mut state = RcptState {};
         let (resp, next) = state.process_line(b"RCPT TO: <recipient@example>\r\n", &mut msg);
-        assert_eq!(resp, Some("250 OK"));
+        assert_eq!(resp, Some("250 OK".to_string()));
         assert_eq!(msg.to, vec!["<recipient@example>".to_string()]);
         assert!(next.is_some());
     }
@@ -157,7 +163,10 @@ mod tests {
         let mut msg = Message::default();
         let mut state = RcptState {};
         let (resp, next) = state.process_line(b"DATA\r\n", &mut msg);
-        assert_eq!(resp, Some("354 Start mail input; end with <CRLF>.<CRLF>"));
+        assert_eq!(
+            resp,
+            Some("354 Start mail input; end with <CRLF>.<CRLF>".to_string())
+        );
         assert!(next.is_some());
     }
 
@@ -172,7 +181,7 @@ mod tests {
         assert_eq!(resp, None);
         assert!(next.is_none());
         let (resp, next) = state.process_line(b".\r\n", &mut msg);
-        assert_eq!(resp, Some("250 Mail Delivered"));
+        assert_eq!(resp, Some("250 Mail Delivered".to_string()));
         assert!(next.is_some());
     }
 
@@ -181,7 +190,7 @@ mod tests {
         let mut msg = Message::default();
         let mut state = DoneState {};
         let (resp, next) = state.process_line(b"QUIT\r\n", &mut msg);
-        assert_eq!(resp, Some("503 Bad sequence of commands"));
+        assert_eq!(resp, Some("503 Bad sequence of commands".to_string()));
         assert!(next.is_none());
         assert!(state.is_done());
     }
