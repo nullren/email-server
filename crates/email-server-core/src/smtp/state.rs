@@ -1,14 +1,20 @@
-#[derive(Debug, Default, Clone, Eq, PartialEq)]
-pub enum State {
-    #[default]
-    Init,
-    Mail,
-    Rcpt,
-    Data,
-    Done,
+use derive_builder::Builder;
+
+pub trait SmtpState: Send {
+    fn process_line(
+        &mut self,
+        line: &[u8],
+        message: &mut Message,
+    ) -> (Option<&'static str>, Option<Box<dyn SmtpState>>);
+    fn is_data_collect(&self) -> bool {
+        false
+    }
+    fn is_done(&self) -> bool {
+        false
+    }
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Builder, Debug, Clone)]
 pub struct Message {
     pub sender_domain: String,
     pub from: String,
@@ -16,58 +22,99 @@ pub struct Message {
     pub data: Vec<u8>,
 }
 
-#[derive(Default, Debug, Clone)]
-pub struct MessageReader {
-    pub message: Message,
-    pub state: State,
+pub fn new_state() -> Box<dyn SmtpState + Send> {
+    Box::new(InitState)
 }
 
-impl MessageReader {
-    pub fn read(&mut self, line: &[u8]) -> Result<Option<&'static str>, &'static str> {
-        let command = crate::smtp::command::Command::from_bytes(line);
-
-        match self.state {
-            State::Init => match command {
-                crate::smtp::command::Command::Helo(domain) => {
-                    self.message.sender_domain = domain;
-                    self.state = State::Mail;
-                    Ok(Some("250 mail.humphreyway.com is my domain name"))
-                }
-                _ => Err("503 Bad sequence of commands"),
-            },
-            State::Mail => match command {
-                crate::smtp::command::Command::MailFrom(from) => {
-                    self.message.from = from;
-                    self.state = State::Rcpt;
-                    Ok(Some("250 OK"))
-                }
-                _ => Err("503 Bad sequence of commands"),
-            },
-            State::Rcpt => match command {
-                crate::smtp::command::Command::RcptTo(to) => {
-                    self.message.to.push(to);
-                    Ok(Some("250 OK"))
-                }
-                crate::smtp::command::Command::Data => {
-                    self.state = State::Data;
-                    Ok(Some("354 Enter mail body. End new line with just a '.'"))
-                }
-                _ => Err("503 Bad sequence of commands"),
-            },
-            State::Data => {
-                if line == b".\r\n" {
-                    self.state = State::Done;
-                    Ok(Some("250 Mail Delivered"))
-                } else if line.starts_with(b"..") {
-                    self.message.data.extend_from_slice(&line[1..]);
-                    Ok(None)
-                } else {
-                    self.message.data.extend_from_slice(line);
-                    Ok(None)
-                }
-            }
-            _ => Err("503 Bad sequence of commands"),
+#[derive(Default)]
+pub struct InitState;
+impl SmtpState for InitState {
+    fn process_line(
+        &mut self,
+        line: &[u8],
+        message: &mut Message,
+    ) -> (Option<&'static str>, Option<Box<dyn SmtpState>>) {
+        if line.starts_with(b"HELO") {
+            message.sender_domain = String::from_utf8_lossy(&line[5..]).trim().to_string();
+            (
+                Some("250 mail.humphreyway.com is my domain name"),
+                Some(Box::new(MailState)),
+            )
+        } else {
+            (Some("503 Bad sequence of commands"), None)
         }
+    }
+}
+
+pub struct MailState;
+impl SmtpState for MailState {
+    fn process_line(
+        &mut self,
+        line: &[u8],
+        message: &mut Message,
+    ) -> (Option<&'static str>, Option<Box<dyn SmtpState>>) {
+        if line.starts_with(b"MAIL FROM:") {
+            message.from = String::from_utf8_lossy(&line[10..]).trim().to_string();
+            (Some("250 OK"), Some(Box::new(RcptState)))
+        } else {
+            (Some("503 Bad sequence of commands"), None)
+        }
+    }
+}
+
+pub struct RcptState;
+impl SmtpState for RcptState {
+    fn process_line(
+        &mut self,
+        line: &[u8],
+        message: &mut Message,
+    ) -> (Option<&'static str>, Option<Box<dyn SmtpState>>) {
+        if line.starts_with(b"RCPT TO:") {
+            message
+                .to
+                .push(String::from_utf8_lossy(&line[8..]).trim().to_string());
+            (Some("250 OK"), Some(Box::new(RcptState)))
+        } else if line == b"DATA\r\n" {
+            (
+                Some("354 Start mail input; end with <CRLF>.<CRLF>"),
+                Some(Box::new(DataCollectState)),
+            )
+        } else {
+            (Some("503 Bad sequence of commands"), None)
+        }
+    }
+}
+
+pub struct DataCollectState;
+impl SmtpState for DataCollectState {
+    fn process_line(
+        &mut self,
+        line: &[u8],
+        message: &mut Message,
+    ) -> (Option<&'static str>, Option<Box<dyn SmtpState>>) {
+        if line == b".\r\n" {
+            (Some("250 Mail Delivered"), Some(Box::new(DoneState)))
+        } else {
+            message.data.extend_from_slice(line);
+            (None, None)
+        }
+    }
+    fn is_data_collect(&self) -> bool {
+        true
+    }
+}
+
+pub struct DoneState;
+impl SmtpState for DoneState {
+    fn process_line(
+        &mut self,
+        _line: &[u8],
+        _message: &mut Message,
+    ) -> (Option<&'static str>, Option<Box<dyn SmtpState>>) {
+        (Some("503 Bad sequence of commands"), None)
+    }
+    fn is_done(&self) -> bool {
+        true
     }
 }
 
@@ -76,42 +123,66 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_smtp_state_transitions() {
-        let mut reader = MessageReader::default();
+    fn test_init_state_helo() {
+        let mut msg = Message::default();
+        let mut state = InitState {};
+        let (resp, next) = state.process_line(b"HELO example.com", &mut msg);
+        assert_eq!(resp, Some("250 mail.humphreyway.com is my domain name"));
+        assert_eq!(msg.sender_domain, "example.com");
+        assert!(next.is_some());
+    }
 
-        // Initial state should be Init
-        assert_eq!(reader.state, State::Init);
+    #[test]
+    fn test_mail_state_from() {
+        let mut msg = Message::default();
+        let mut state = MailState {};
+        let (resp, next) = state.process_line(b"MAIL FROM: <sender@example>", &mut msg);
+        assert_eq!(resp, Some("250 OK"));
+        assert_eq!(msg.from, "<sender@example>");
+        assert!(next.is_some());
+    }
 
-        // Transition from Init to Mail
-        assert_eq!(
-            reader.read(b"HELO example.com"),
-            Ok(Some("250 mail.humphreyway.com is my domain name"))
-        );
-        assert_eq!(reader.state, State::Mail);
+    #[test]
+    fn test_rcpt_state_to() {
+        let mut msg = Message::default();
+        let mut state = RcptState {};
+        let (resp, next) = state.process_line(b"RCPT TO: <recipient@example>", &mut msg);
+        assert_eq!(resp, Some("250 OK"));
+        assert_eq!(msg.to, vec!["<recipient@example>".to_string()]);
+        assert!(next.is_some());
+    }
 
-        // Transition from Mail to Rcpt
-        assert_eq!(
-            reader.read(b"MAIL FROM: <user@example.com>"),
-            Ok(Some("250 OK"))
-        );
-        assert_eq!(reader.state, State::Rcpt);
+    #[test]
+    fn test_data_state() {
+        let mut msg = Message::default();
+        let mut state = RcptState {};
+        let (resp, next) = state.process_line(b"DATA", &mut msg);
+        assert_eq!(resp, Some("354 Start mail input; end with <CRLF>.<CRLF>"));
+        assert!(next.is_some());
+    }
 
-        // Add a recipient
-        assert_eq!(
-            reader.read(b"RCPT TO: <recipient@example.com>"),
-            Ok(Some("250 OK"))
-        );
+    #[test]
+    fn test_data_collect_state() {
+        let mut msg = Message::default();
+        let mut state = DataCollectState {};
+        let (resp, next) = state.process_line(b"Hello", &mut msg);
+        assert_eq!(resp, None);
+        assert!(next.is_none());
+        let (resp, next) = state.process_line(b"World", &mut msg);
+        assert_eq!(resp, None);
+        assert!(next.is_none());
+        let (resp, next) = state.process_line(b".", &mut msg);
+        assert_eq!(resp, Some("250 Mail Delivered"));
+        assert!(next.is_some());
+    }
 
-        // Transition from Rcpt to Data
-        assert_eq!(
-            reader.read(b"DATA"),
-            Ok(Some("354 Enter mail body. End new line with just a '.'"))
-        );
-        assert_eq!(reader.state, State::Data);
-
-        // Handle data input
-        assert_eq!(reader.read(b"Hello, World!\r\n"), Ok(None));
-        assert_eq!(reader.read(b".\r\n"), Ok(Some("250 Mail Delivered")));
-        assert_eq!(reader.state, State::Done);
+    #[test]
+    fn test_done_state() {
+        let mut msg = Message::default();
+        let mut state = DoneState {};
+        let (resp, next) = state.process_line(b"QUIT", &mut msg);
+        assert_eq!(resp, Some("503 Bad sequence of commands"));
+        assert!(next.is_none());
+        assert!(state.is_done());
     }
 }
