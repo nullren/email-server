@@ -5,7 +5,9 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
 pub mod command;
-use command::Command;
+pub mod state;
+
+use state::{SmtpMessageReader, SmtpState};
 
 #[derive(Clone)]
 pub struct SmtpServer {}
@@ -47,78 +49,5 @@ impl SocketHandler for SmtpServer {
             }
             Ok(())
         })
-    }
-}
-
-#[derive(Debug, Default, Clone, Eq, PartialEq)]
-enum SmtpState {
-    #[default]
-    Init,
-    Mail,
-    Rcpt,
-    Data,
-    Done,
-}
-
-#[derive(Default, Debug, Clone)]
-struct SmtpMessage {
-    sender_domain: String,
-    from: String,
-    to: Vec<String>,
-    data: Vec<u8>,
-}
-
-#[derive(Default, Debug, Clone)]
-struct SmtpMessageReader {
-    message: SmtpMessage,
-    state: SmtpState,
-}
-
-impl SmtpMessageReader {
-    fn read(&mut self, line: &[u8]) -> Result<Option<&str>, &str> {
-        let command = Command::from_bytes(line);
-
-        match self.state {
-            SmtpState::Init => match command {
-                Command::Helo(domain) => {
-                    self.message.sender_domain = domain;
-                    self.state = SmtpState::Mail;
-                    Ok(Some("250 mail.humphreyway.com is my domain name"))
-                }
-                _ => Err("503 Bad sequence of commands"),
-            },
-            SmtpState::Mail => match command {
-                Command::MailFrom(from) => {
-                    self.message.from = from;
-                    self.state = SmtpState::Rcpt;
-                    Ok(Some("250 OK"))
-                }
-                _ => Err("503 Bad sequence of commands"),
-            },
-            SmtpState::Rcpt => match command {
-                Command::RcptTo(to) => {
-                    self.message.to.push(to);
-                    Ok(Some("250 OK"))
-                }
-                Command::Data => {
-                    self.state = SmtpState::Data;
-                    Ok(Some("354 Enter mail body. End new line with just a '.'"))
-                }
-                _ => Err("503 Bad sequence of commands"),
-            },
-            SmtpState::Data => {
-                if line == b".\r\n" {
-                    self.state = SmtpState::Done;
-                    Ok(Some("250 Mail Delivered"))
-                } else if line.starts_with(b"..") {
-                    self.message.data.extend_from_slice(&line[1..]);
-                    Ok(None)
-                } else {
-                    self.message.data.extend_from_slice(line);
-                    Ok(None)
-                }
-            }
-            _ => Err("503 Bad sequence of commands"),
-        }
     }
 }
