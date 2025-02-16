@@ -4,6 +4,9 @@ use std::pin::Pin;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
+pub mod command;
+use command::Command;
+
 #[derive(Clone)]
 pub struct SmtpServer {}
 
@@ -73,39 +76,36 @@ struct SmtpMessageReader {
 
 impl SmtpMessageReader {
     fn read(&mut self, line: &[u8]) -> Result<Option<&str>, &str> {
+        let command = Command::from_bytes(line);
+
         match self.state {
-            SmtpState::Init => {
-                if line.starts_with(b"HELO") {
-                    self.message.sender_domain =
-                        String::from_utf8_lossy(&line[5..]).trim().to_string();
+            SmtpState::Init => match command {
+                Command::Helo(domain) => {
+                    self.message.sender_domain = domain;
                     self.state = SmtpState::Mail;
                     Ok(Some("250 mail.humphreyway.com is my domain name"))
-                } else {
-                    Err("503 Bad sequence of commands")
                 }
-            }
-            SmtpState::Mail => {
-                if line.starts_with(b"MAIL FROM:") {
-                    self.message.from = String::from_utf8_lossy(&line[10..]).trim().to_string();
+                _ => Err("503 Bad sequence of commands"),
+            },
+            SmtpState::Mail => match command {
+                Command::MailFrom(from) => {
+                    self.message.from = from;
                     self.state = SmtpState::Rcpt;
                     Ok(Some("250 OK"))
-                } else {
-                    Err("503 Bad sequence of commands")
                 }
-            }
-            SmtpState::Rcpt => {
-                if line.starts_with(b"RCPT TO:") {
-                    self.message
-                        .to
-                        .push(String::from_utf8_lossy(&line[8..]).trim().to_string());
+                _ => Err("503 Bad sequence of commands"),
+            },
+            SmtpState::Rcpt => match command {
+                Command::RcptTo(to) => {
+                    self.message.to.push(to);
                     Ok(Some("250 OK"))
-                } else if line.starts_with(b"DATA") {
-                    self.state = SmtpState::Data;
-                    Ok(Some("354 Enter mail body.  End new line with just a '.'"))
-                } else {
-                    Err("503 Bad sequence of commands")
                 }
-            }
+                Command::Data => {
+                    self.state = SmtpState::Data;
+                    Ok(Some("354 Enter mail body. End new line with just a '.'"))
+                }
+                _ => Err("503 Bad sequence of commands"),
+            },
             SmtpState::Data => {
                 if line == b".\r\n" {
                     self.state = SmtpState::Done;
