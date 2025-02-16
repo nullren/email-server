@@ -126,7 +126,7 @@ mod tests {
     fn test_init_state_helo() {
         let mut msg = Message::default();
         let mut state = InitState {};
-        let (resp, next) = state.process_line(b"HELO example.com", &mut msg);
+        let (resp, next) = state.process_line(b"HELO example.com\r\n", &mut msg);
         assert_eq!(resp, Some("250 mail.humphreyway.com is my domain name"));
         assert_eq!(msg.sender_domain, "example.com");
         assert!(next.is_some());
@@ -136,7 +136,7 @@ mod tests {
     fn test_mail_state_from() {
         let mut msg = Message::default();
         let mut state = MailState {};
-        let (resp, next) = state.process_line(b"MAIL FROM: <sender@example>", &mut msg);
+        let (resp, next) = state.process_line(b"MAIL FROM: <sender@example>\r\n", &mut msg);
         assert_eq!(resp, Some("250 OK"));
         assert_eq!(msg.from, "<sender@example>");
         assert!(next.is_some());
@@ -146,7 +146,7 @@ mod tests {
     fn test_rcpt_state_to() {
         let mut msg = Message::default();
         let mut state = RcptState {};
-        let (resp, next) = state.process_line(b"RCPT TO: <recipient@example>", &mut msg);
+        let (resp, next) = state.process_line(b"RCPT TO: <recipient@example>\r\n", &mut msg);
         assert_eq!(resp, Some("250 OK"));
         assert_eq!(msg.to, vec!["<recipient@example>".to_string()]);
         assert!(next.is_some());
@@ -156,7 +156,7 @@ mod tests {
     fn test_data_state() {
         let mut msg = Message::default();
         let mut state = RcptState {};
-        let (resp, next) = state.process_line(b"DATA", &mut msg);
+        let (resp, next) = state.process_line(b"DATA\r\n", &mut msg);
         assert_eq!(resp, Some("354 Start mail input; end with <CRLF>.<CRLF>"));
         assert!(next.is_some());
     }
@@ -165,13 +165,13 @@ mod tests {
     fn test_data_collect_state() {
         let mut msg = Message::default();
         let mut state = DataCollectState {};
-        let (resp, next) = state.process_line(b"Hello", &mut msg);
+        let (resp, next) = state.process_line(b"Hello\r\n", &mut msg);
         assert_eq!(resp, None);
         assert!(next.is_none());
-        let (resp, next) = state.process_line(b"World", &mut msg);
+        let (resp, next) = state.process_line(b"World\r\n", &mut msg);
         assert_eq!(resp, None);
         assert!(next.is_none());
-        let (resp, next) = state.process_line(b".", &mut msg);
+        let (resp, next) = state.process_line(b".\r\n", &mut msg);
         assert_eq!(resp, Some("250 Mail Delivered"));
         assert!(next.is_some());
     }
@@ -180,7 +180,7 @@ mod tests {
     fn test_done_state() {
         let mut msg = Message::default();
         let mut state = DoneState {};
-        let (resp, next) = state.process_line(b"QUIT", &mut msg);
+        let (resp, next) = state.process_line(b"QUIT\r\n", &mut msg);
         assert_eq!(resp, Some("503 Bad sequence of commands"));
         assert!(next.is_none());
         assert!(state.is_done());

@@ -231,6 +231,7 @@ dependencies = [
 name = "email-server-core"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "derive_builder",
  "tokio",
 ]
