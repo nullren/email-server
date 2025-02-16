@@ -95,6 +95,7 @@ impl Server {
                         (None, _) => {}
                     }
 
+                    // we don't ever stay in a "Done" state, we just reset
                     if state.is_done() {
                         println!("Message received: {:?}", message);
                         // TODO: Handle the message

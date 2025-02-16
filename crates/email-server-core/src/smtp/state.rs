@@ -80,11 +80,11 @@ impl SmtpState for RcptState {
             (Some("250 OK".to_string()), Some(Box::new(RcptState)))
         } else if line == b"DATA\r\n" {
             (
-                Some("354 Start mail input; end with <CRLF>.<CRLF>".to_string()),
+                Some(status::Code::EnterMessage.to_string()),
                 Some(Box::new(DataCollectState)),
             )
         } else {
-            (Some("503 Bad sequence of commands".to_string()), None)
+            (Some(status::Code::BadSequence.to_string()), None)
         }
     }
 }
@@ -98,7 +98,7 @@ impl SmtpState for DataCollectState {
     ) -> (Option<String>, Option<Box<dyn SmtpState>>) {
         if line == b".\r\n" {
             (
-                Some("250 Mail Delivered".to_string()),
+                Some(status::Code::MessageSent.to_string()),
                 Some(Box::new(DoneState)),
             )
         } else {
@@ -118,7 +118,7 @@ impl SmtpState for DoneState {
         _line: &[u8],
         _message: &mut Message,
     ) -> (Option<String>, Option<Box<dyn SmtpState>>) {
-        (Some("503 Bad sequence of commands".to_string()), None)
+        (Some(status::Code::BadSequence.to_string()), None)
     }
     fn is_done(&self) -> bool {
         true
@@ -134,10 +134,7 @@ mod tests {
         let mut msg = Message::default();
         let mut state = InitState {};
         let (resp, next) = state.process_line(b"HELO example.com\r\n", &mut msg);
-        assert_eq!(
-            resp,
-            Some("250 mail.humphreyway.com is my domain name".to_string())
-        );
+        assert_eq!(resp, Some(status::Code::Helo.to_string()));
         assert_eq!(msg.sender_domain, "example.com");
         assert!(next.is_some());
     }
@@ -147,7 +144,7 @@ mod tests {
         let mut msg = Message::default();
         let mut state = MailState {};
         let (resp, next) = state.process_line(b"MAIL FROM: <sender@example>\r\n", &mut msg);
-        assert_eq!(resp, Some("250 OK".to_string()));
+        assert_eq!(resp, Some(status::Code::Ok.to_string()));
         assert_eq!(msg.from, "<sender@example>");
         assert!(next.is_some());
     }
@@ -157,7 +154,7 @@ mod tests {
         let mut msg = Message::default();
         let mut state = RcptState {};
         let (resp, next) = state.process_line(b"RCPT TO: <recipient@example>\r\n", &mut msg);
-        assert_eq!(resp, Some("250 OK".to_string()));
+        assert_eq!(resp, Some(status::Code::Ok.to_string()));
         assert_eq!(msg.to, vec!["<recipient@example>".to_string()]);
         assert!(next.is_some());
     }
@@ -167,10 +164,7 @@ mod tests {
         let mut msg = Message::default();
         let mut state = RcptState {};
         let (resp, next) = state.process_line(b"DATA\r\n", &mut msg);
-        assert_eq!(
-            resp,
-            Some("354 Start mail input; end with <CRLF>.<CRLF>".to_string())
-        );
+        assert_eq!(resp, Some(status::Code::EnterMessage.to_string()));
         assert!(next.is_some());
     }
 
@@ -185,7 +179,7 @@ mod tests {
         assert_eq!(resp, None);
         assert!(next.is_none());
         let (resp, next) = state.process_line(b".\r\n", &mut msg);
-        assert_eq!(resp, Some("250 Mail Delivered".to_string()));
+        assert_eq!(resp, Some(status::Code::MessageSent.to_string()));
         assert!(next.is_some());
     }
 
@@ -194,7 +188,7 @@ mod tests {
         let mut msg = Message::default();
         let mut state = DoneState {};
         let (resp, next) = state.process_line(b"QUIT\r\n", &mut msg);
-        assert_eq!(resp, Some("503 Bad sequence of commands".to_string()));
+        assert_eq!(resp, Some(status::Code::BadSequence.to_string()));
         assert!(next.is_none());
         assert!(state.is_done());
     }

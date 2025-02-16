@@ -10,6 +10,8 @@ pub enum Code {
     Goodbye,
     BadSequence,
     Helo,
+    EnterMessage,
+    MessageSent,
 }
 
 impl Display for Code {
@@ -23,6 +25,8 @@ impl Display for Code {
             Code::Goodbye => write!(f, "221 Goodbye"),
             Code::BadSequence => write!(f, "503 Bad sequence of commands"),
             Code::Helo => write!(f, "250 mail.example.com"),
+            Code::EnterMessage => write!(f, "354 enter mail, end with line containing only \".\""),
+            Code::MessageSent => write!(f, "250 Message sent"),
         }
     }
 }
