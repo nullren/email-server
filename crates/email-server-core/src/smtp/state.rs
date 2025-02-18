@@ -1,4 +1,5 @@
-use crate::smtp::{status, Message};
+use crate::message::Message;
+use crate::smtp::status;
 
 pub trait SmtpState: Send {
     fn process_line(
@@ -119,7 +120,7 @@ impl SmtpState for DoneState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::smtp::message::Message;
+    use crate::message::Message;
 
     #[test]
     fn test_init_state_helo() {

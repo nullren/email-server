@@ -1,5 +1,5 @@
-use crate::smtp;
-use crate::smtp::{state, status, Message};
+use crate::message::{self, Message};
+use crate::smtp::{state, status};
 use crate::socket::{SocketError, SocketHandler};
 use bytes::BytesMut;
 use std::future::Future;
@@ -19,7 +19,7 @@ macro_rules! outln {
 
 #[derive(Clone)]
 pub struct Server {
-    pub(crate) handler: Arc<dyn smtp::message::Handler + Sync + Send>,
+    pub(crate) handler: Arc<dyn message::Handler + Sync + Send>,
 }
 
 impl SocketHandler for Server {

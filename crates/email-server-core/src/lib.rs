@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+pub mod message;
 pub mod smtp;
 pub mod socket;
 
@@ -7,7 +8,7 @@ pub async fn smtp_server(addr: &str) -> Result<(), socket::SocketError> {
     socket::run(
         addr,
         smtp::Server {
-            handler: Arc::new(smtp::PrintHandler),
+            handler: Arc::new(message::PrintHandler),
         },
     )
     .await
