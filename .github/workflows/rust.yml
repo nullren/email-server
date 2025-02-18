@@ -18,14 +18,14 @@ jobs:
       run: rustup component add rustfmt clippy
     - name: Install cargo dependencies
       run: cargo install cargo-deny
-    - name: Format
+    - name: Formatted correctly
       run: cargo fmt --check
-    - name: Clippy
+    - name: Clippy happy
       run: cargo clippy
-    - name: Build
+    - name: Build works
       run: cargo build --verbose
-    - name: Run tests
+    - name: Tests pass
       run: cargo test --verbose
-    - name: Run license check
+    - name: Licenses allowed
       run: cargo deny check
 
