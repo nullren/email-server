@@ -90,4 +90,59 @@ mod tests {
         println!("QUIT response: {}", response);
         assert!(response.starts_with("221"));
     }
+
+    #[tokio::test]
+    async fn test_full_message() {
+        let server_address = get_server_address().await;
+
+        // Connect to the SMTP server
+        let mut stream = TcpStream::connect(server_address).await.unwrap();
+        let mut buffer = [0; 1024];
+        let _ = stream.read(&mut buffer).await.unwrap();
+
+        // Send HELO command
+        stream.write_all(b"HELO example.com\r\n").await.unwrap();
+        let n = stream.read(&mut buffer).await.unwrap();
+        let response = String::from_utf8_lossy(&buffer[..n]);
+        assert!(response.starts_with("250"));
+
+        // Send MAIL FROM command
+        stream
+            .write_all(b"MAIL FROM: Alice <Alice@example.com>\r\n")
+            .await
+            .unwrap();
+        let n = stream.read(&mut buffer).await.unwrap();
+        let response = String::from_utf8_lossy(&buffer[..n]);
+        assert!(response.starts_with("250"));
+
+        // Send RCPT TO command
+        stream
+            .write_all(b"RCPT TO: Bob <bob@example.com>\r\n")
+            .await
+            .unwrap();
+        let n = stream.read(&mut buffer).await.unwrap();
+        let response = String::from_utf8_lossy(&buffer[..n]);
+        assert!(response.starts_with("250"));
+
+        // Send DATA command
+        stream.write_all(b"DATA\r\n").await.unwrap();
+        let n = stream.read(&mut buffer).await.unwrap();
+        let response = String::from_utf8_lossy(&buffer[..n]);
+        assert!(response.starts_with("354"));
+
+        // Send message body
+        stream
+            .write_all(b"Subject: Test\r\n\r\nHello, world!\r\n.\r\n")
+            .await
+            .unwrap();
+        let n = stream.read(&mut buffer).await.unwrap();
+        let response = String::from_utf8_lossy(&buffer[..n]);
+        assert!(response.starts_with("250"));
+
+        // Send QUIT command
+        stream.write_all(b"QUIT\r\n").await.unwrap();
+        let n = stream.read(&mut buffer).await.unwrap();
+        let response = String::from_utf8_lossy(&buffer[..n]);
+        assert!(response.starts_with("221"));
+    }
 }
