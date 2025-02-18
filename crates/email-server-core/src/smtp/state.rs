@@ -1,5 +1,4 @@
-use crate::smtp::status;
-use derive_builder::Builder;
+use crate::smtp::{status, Message};
 
 pub trait SmtpState: Send {
     fn process_line(
@@ -13,14 +12,6 @@ pub trait SmtpState: Send {
     fn is_done(&self) -> bool {
         false
     }
-}
-
-#[derive(Default, Builder, Debug, Clone)]
-pub struct Message {
-    pub sender_domain: String,
-    pub from: String,
-    pub to: Vec<String>,
-    pub data: Vec<u8>,
 }
 
 pub fn new_state() -> Box<dyn SmtpState + Send> {
@@ -127,6 +118,7 @@ impl SmtpState for DoneState {
 
 #[cfg(test)]
 mod tests {
+    use crate::smtp::message::Message;
     use super::*;
 
     #[test]

@@ -1,5 +1,9 @@
 pub mod server;
+pub use server::Server;
+
 pub mod state;
+
 pub mod status;
 
-pub use server::Server;
+mod message;
+pub use message::Message;

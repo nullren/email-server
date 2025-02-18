@@ -1,5 +1,4 @@
-use crate::smtp::state::Message;
-use crate::smtp::{state, status};
+use crate::smtp::{state, status, Message};
 use crate::socket::{SocketError, SocketHandler};
 use bytes::BytesMut;
 use std::future::Future;
