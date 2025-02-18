@@ -13,6 +13,7 @@ pub enum SocketError {
     BindFailed(std::io::Error),
     ConnectionFailed(std::io::Error),
     IoError(std::io::Error),
+    BoxError(Box<dyn Error>),
     Closed,
 }
 
@@ -22,6 +23,7 @@ impl Display for SocketError {
             SocketError::BindFailed(e) => write!(f, "BindFailed: {}", e),
             SocketError::ConnectionFailed(e) => write!(f, "ConnectionFailed: {}", e),
             SocketError::IoError(e) => write!(f, "IoError: {}", e),
+            SocketError::BoxError(e) => write!(f, "BoxError: {}", e),
             SocketError::Closed => write!(f, "Closed"),
         }
     }

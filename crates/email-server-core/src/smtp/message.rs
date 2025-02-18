@@ -1,6 +1,6 @@
-use std::error::Error;
 use async_trait::async_trait;
 use derive_builder::Builder;
+use std::error::Error;
 
 #[derive(Default, Builder, Debug, Clone)]
 pub struct Message {
@@ -20,10 +20,12 @@ pub struct PrintHandler;
 #[async_trait]
 impl Handler for PrintHandler {
     async fn handle_message(&self, message: Message) -> Result<(), Box<dyn Error>> {
-        println!("Received message from {} to {} with {} bytes of data",
-                 message.from,
-                 message.to.join(", "),
-                 message.data.len());
+        println!(
+            "Received message from {} to {} with {} bytes of data",
+            message.from,
+            message.to.join(", "),
+            message.data.len()
+        );
         Ok(())
     }
 }

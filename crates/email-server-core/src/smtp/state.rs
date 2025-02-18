@@ -118,8 +118,8 @@ impl SmtpState for DoneState {
 
 #[cfg(test)]
 mod tests {
-    use crate::smtp::message::Message;
     use super::*;
+    use crate::smtp::message::Message;
 
     #[test]
     fn test_init_state_helo() {

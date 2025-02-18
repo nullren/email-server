@@ -1,8 +1,10 @@
+use crate::smtp;
 use crate::smtp::{state, status, Message};
 use crate::socket::{SocketError, SocketHandler};
 use bytes::BytesMut;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
@@ -16,7 +18,9 @@ macro_rules! outln {
 }
 
 #[derive(Clone)]
-pub struct Server {}
+pub struct Server {
+    pub(crate) handler: Arc<dyn smtp::message::Handler + Sync + Send>,
+}
 
 impl SocketHandler for Server {
     type Future = Pin<Box<dyn Future<Output = Result<(), SocketError>> + Send>>;
@@ -57,10 +61,10 @@ impl SocketHandler for Server {
 }
 
 impl Server {
-    fn handle_tls_connection(
-        &mut self,
+    fn handle_tls_connection<'a>(
+        &'a mut self,
         mut stream: TcpStream,
-    ) -> Pin<Box<dyn Future<Output = Result<(), SocketError>> + Send>> {
+    ) -> Pin<Box<dyn Future<Output = Result<(), SocketError>> + Send + 'a>> {
         Box::pin(async move {
             outln!(stream, status::Code::ServiceReady);
             let mut message = Message::default();
@@ -96,8 +100,10 @@ impl Server {
 
                     // we don't ever stay in a "Done" state, we just reset
                     if state.is_done() {
-                        println!("Message received: {:?}", message);
-                        // TODO: Handle the message
+                        if let Err(e) = self.handler.handle_message(message).await {
+                            // we don't want to break the loop, just log the error
+                            eprintln!("Error sending message: {}", e);
+                        }
                         message = Message::default();
                         state = state::new_state();
                     }
