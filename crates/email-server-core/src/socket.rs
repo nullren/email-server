@@ -1,9 +1,9 @@
+use std::pin::Pin;
 use std::{
     error::Error,
     fmt::{Display, Formatter},
     future::Future,
 };
-
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task;
 use tokio::time::Instant;
@@ -35,20 +35,42 @@ impl From<std::io::Error> for SocketError {
     }
 }
 
+pub trait ToTcpListener {
+    type Future: Future<Output = Result<TcpListener, std::io::Error>>;
+    fn to_tcp_listener(self) -> Self::Future;
+}
+
+impl ToTcpListener for TcpListener {
+    type Future = Pin<Box<dyn Future<Output = Result<TcpListener, std::io::Error>>>>;
+    fn to_tcp_listener(self) -> Self::Future {
+        Box::pin(async move { Ok(self) })
+    }
+}
+
+impl ToTcpListener for &str {
+    type Future = Pin<Box<dyn Future<Output = Result<TcpListener, std::io::Error>> + Send>>;
+    fn to_tcp_listener(self) -> Self::Future {
+        let this = self.to_string();
+        Box::pin(async move { TcpListener::bind(this).await })
+    }
+}
+
 pub trait SocketHandler {
     type Future: Future<Output = Result<(), SocketError>>;
     fn handle_connection(&mut self, stream: TcpStream) -> Self::Future;
 }
 
-pub async fn run<H>(addr: &str, handler: H) -> Result<(), SocketError>
+pub async fn run<L, H>(addr: L, handler: H) -> Result<(), SocketError>
 where
+    L: ToTcpListener,
     H: SocketHandler + Clone + Send + 'static,
     <H as SocketHandler>::Future: Send,
 {
-    let listener = TcpListener::bind(addr)
+    let listener = addr
+        .to_tcp_listener()
         .await
         .map_err(SocketError::BindFailed)?;
-    println!("SMTP Server listening on {}", addr);
+    println!("SMTP Server listening on {}", listener.local_addr()?);
 
     loop {
         let (socket, addr) = listener
