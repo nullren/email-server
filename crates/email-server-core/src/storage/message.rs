@@ -1,19 +1,21 @@
-use std::path::Path;
+use crate::message;
 use async_trait::async_trait;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool};
-use crate::message;
+use std::path::Path;
 
-struct SqliteStore {
+pub struct SqliteStore {
     pool: SqlitePool,
 }
 
 impl SqliteStore {
-    pub async fn open(path: impl AsRef<Path>) -> Result<Self, sqlx::Error> {
+    pub async fn new(path: impl AsRef<Path>) -> Result<Self, sqlx::Error> {
         let opts = SqliteConnectOptions::default().filename(path);
         let pool = SqlitePool::connect_with(opts).await?;
-        Ok(Self { pool })
+        let this = Self { pool };
+        this.initialize_table().await?;
+        Ok(this)
     }
-    
+
     async fn initialize_table(&self) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"
@@ -25,31 +27,40 @@ impl SqliteStore {
                )
                "#,
         )
-            .execute(&self.pool)
-            .await?;
+        .execute(&self.pool)
+        .await?;
         Ok(())
     }
-    
-    async fn create_message(&self, from: &str, to: &[String], message: &[u8]) -> Result<(), sqlx::Error> {
+
+    async fn create_message(
+        &self,
+        from: &str,
+        to: &[String],
+        message: &[u8],
+    ) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"
                INSERT INTO messages (from_addr, to_addrs, message)
                VALUES (?, ?, ?)
                "#,
         )
-            .bind(from)
-            .bind(to.join(","))
-            .bind(message)
-            .execute(&self.pool)
-            .await?;
+        .bind(from)
+        .bind(to.join(","))
+        .bind(message)
+        .execute(&self.pool)
+        .await?;
         Ok(())
     }
 }
 
 #[async_trait]
 impl message::Handler for SqliteStore {
-    async fn handle_message(&self, message: message::Message) -> Result<(), Box<dyn std::error::Error>> {
-        self.create_message(&message.from, &message.to, &message.data).await?;
+    async fn handle_message(
+        &self,
+        message: message::Message,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.create_message(&message.from, &message.to, &message.data)
+            .await?;
         Ok(())
     }
 }
@@ -58,17 +69,14 @@ impl message::Handler for SqliteStore {
 mod tests {
     use super::*;
     use crate::message;
-    use tokio;
     use crate::message::Handler;
+    use tokio;
 
     #[tokio::test]
     async fn test_create_message() {
         // Use an in-memory database for testing
         let temp_file = tempfile::NamedTempFile::new().unwrap();
-        let store = SqliteStore::open(temp_file.path()).await.unwrap();
-
-        // Initialize the table
-        store.initialize_table().await.unwrap();
+        let store = SqliteStore::new(temp_file.path()).await.unwrap();
 
         // Create a test message
         let test_message = message::Message {
@@ -87,9 +95,9 @@ mod tests {
             SELECT from_addr, to_addrs, message FROM messages
             "#,
         )
-            .fetch_one(&store.pool)
-            .await
-            .unwrap();
+        .fetch_one(&store.pool)
+        .await
+        .unwrap();
 
         assert_eq!(row.0, "alice@example.com");
         assert_eq!(row.1, "bob@example.com");

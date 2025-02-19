@@ -29,3 +29,21 @@ impl Handler for PrintHandler {
         Ok(())
     }
 }
+
+pub struct MultiHandler {
+    handlers: Vec<Box<dyn Handler + Send + Sync>>,
+}
+
+pub fn multi_handler(handlers: Vec<Box<dyn Handler + Send + Sync>>) -> MultiHandler {
+    MultiHandler { handlers }
+}
+
+#[async_trait]
+impl Handler for MultiHandler {
+    async fn handle_message(&self, message: Message) -> Result<(), Box<dyn Error>> {
+        for handler in &self.handlers {
+            handler.handle_message(message.clone()).await?;
+        }
+        Ok(())
+    }
+}

@@ -5,13 +5,16 @@ use clap::Parser;
 struct Args {
     #[arg(env, long, default_value = "0.0.0.0:25")]
     smtp_listen_address: String,
+
+    #[arg(env, long, default_value = "email.db")]
+    sqlite_path: String,
 }
 
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
 
-    email_server_core::smtp_server(&*args.smtp_listen_address)
+    email_server_core::smtp_server(&*args.smtp_listen_address, &*args.sqlite_path)
         .await
         .unwrap();
 }

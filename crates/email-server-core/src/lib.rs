@@ -1,4 +1,6 @@
-use crate::socket::ToTcpListener;
+use crate::message::PrintHandler;
+use crate::socket::{SocketError, ToTcpListener};
+use std::path::Path;
 use std::sync::Arc;
 
 pub mod message;
@@ -6,14 +8,18 @@ pub mod smtp;
 pub mod socket;
 pub mod storage;
 
-pub async fn smtp_server<L: ToTcpListener>(addr: L) -> Result<(), socket::SocketError> {
-    socket::run(
-        addr,
-        smtp::Server {
-            handler: Arc::new(message::PrintHandler),
-        },
-    )
-    .await
+pub async fn smtp_server<L: ToTcpListener, P: AsRef<Path>>(
+    addr: L,
+    sqlite_db: P,
+) -> Result<(), socket::SocketError> {
+    let print_handler = Box::new(PrintHandler);
+    let storage_handler = Box::new(
+        storage::SqliteStore::new(sqlite_db)
+            .await
+            .map_err(|e| SocketError::BoxError(e.into()))?,
+    );
+    let handler = Arc::new(message::multi_handler(vec![print_handler, storage_handler]));
+    socket::run(addr, smtp::Server { handler }).await
 }
 
 #[cfg(test)]
@@ -27,9 +33,10 @@ mod tests {
 
         let local_addr = listener.local_addr().unwrap();
         let addr_str = local_addr.to_string();
+        let temp_file = tempfile::NamedTempFile::new().unwrap();
 
         tokio::spawn(async move {
-            if let Err(e) = smtp_server(listener).await {
+            if let Err(e) = smtp_server(listener, temp_file.path()).await {
                 eprintln!("SMTP Server Error: {}", e);
             }
         });
