@@ -34,7 +34,7 @@ impl SmtpState for InitState {
                 Some(Box::new(MailState)),
             )
         } else {
-            (Some(status::Code::BadSequence.to_string()), None)
+            (Some(status::Code::BadSequence.to_string()), Some(Box::new(InitState)))
         }
     }
 }
