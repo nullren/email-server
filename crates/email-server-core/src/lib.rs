@@ -20,129 +20,108 @@ mod tests {
     use crate::smtp_server;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::{TcpListener, TcpStream};
-    use tokio::sync::OnceCell;
-
-    static SERVER_ADDRESS: OnceCell<String> = OnceCell::const_new();
 
     async fn start_server() -> String {
-        let addr = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let local_addr = addr.local_addr().unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+
+        let local_addr = listener.local_addr().unwrap();
+        let addr_str = local_addr.to_string();
 
         tokio::spawn(async move {
-            smtp_server(addr).await.unwrap();
+            if let Err(e) = smtp_server(listener).await {
+                eprintln!("SMTP Server Error: {}", e);
+            }
         });
 
-        // Give the server a moment to start
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        // Ensure the server is actually accepting connections
+        for _ in 0..10 {
+            match TcpStream::connect(&addr_str).await {
+                Ok(_) => return addr_str, // If we connect successfully, return address
+                Err(_) => tokio::time::sleep(tokio::time::Duration::from_millis(50)).await,
+            }
+        }
 
-        local_addr.to_string()
+        panic!("Server failed to start");
     }
 
-    async fn get_server_address() -> &'static str {
-        SERVER_ADDRESS.get_or_init(start_server).await
-    }
-
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_smtp_server_initial_response() {
-        let server_address = get_server_address().await;
+        let server_address = start_server().await;
 
-        // Connect to the SMTP server
         let mut stream = TcpStream::connect(server_address).await.unwrap();
-
-        // Read the server's initial response
         let mut buffer = [0; 1024];
         let n = stream.read(&mut buffer).await.unwrap();
         let response = String::from_utf8_lossy(&buffer[..n]);
         assert!(response.starts_with("220"));
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_smtp_server_helo_command() {
-        let server_address = get_server_address().await;
+        let server_address = start_server().await;
 
-        // Connect to the SMTP server
         let mut stream = TcpStream::connect(server_address).await.unwrap();
         let mut buffer = [0; 1024];
-        let _ = stream.read(&mut buffer).await.unwrap();
+        stream.read(&mut buffer).await.unwrap();
 
-        // Send HELO command
         stream.write_all(b"HELO example.com\r\n").await.unwrap();
-        let mut buffer = [0; 1024];
         let n = stream.read(&mut buffer).await.unwrap();
         let response = String::from_utf8_lossy(&buffer[..n]);
         assert!(response.starts_with("250"));
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_smtp_server_quit_command() {
-        let server_address = get_server_address().await;
+        let server_address = start_server().await;
 
-        // Connect to the SMTP server
         let mut stream = TcpStream::connect(server_address).await.unwrap();
         let mut buffer = [0; 1024];
-        let _ = stream.read(&mut buffer).await.unwrap();
+        stream.read(&mut buffer).await.unwrap();
 
-        // Send QUIT command
         stream.write_all(b"QUIT\r\n").await.unwrap();
-        let mut buffer = [0; 1024];
         let n = stream.read(&mut buffer).await.unwrap();
         let response = String::from_utf8_lossy(&buffer[..n]);
-        println!("QUIT response: {}", response);
         assert!(response.starts_with("221"));
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_full_message() {
-        let server_address = get_server_address().await;
+        let server_address = start_server().await;
 
-        // Connect to the SMTP server
         let mut stream = TcpStream::connect(server_address).await.unwrap();
         let mut buffer = [0; 1024];
-        let _ = stream.read(&mut buffer).await.unwrap();
+        stream.read(&mut buffer).await.unwrap();
 
-        // Send HELO command
         stream.write_all(b"HELO example.com\r\n").await.unwrap();
         let n = stream.read(&mut buffer).await.unwrap();
-        let response = String::from_utf8_lossy(&buffer[..n]);
-        assert!(response.starts_with("250"));
+        assert!(String::from_utf8_lossy(&buffer[..n]).starts_with("250"));
 
-        // Send MAIL FROM command
         stream
             .write_all(b"MAIL FROM: Alice <Alice@example.com>\r\n")
             .await
             .unwrap();
         let n = stream.read(&mut buffer).await.unwrap();
-        let response = String::from_utf8_lossy(&buffer[..n]);
-        assert!(response.starts_with("250"));
+        assert!(String::from_utf8_lossy(&buffer[..n]).starts_with("250"));
 
-        // Send RCPT TO command
         stream
             .write_all(b"RCPT TO: Bob <bob@example.com>\r\n")
             .await
             .unwrap();
         let n = stream.read(&mut buffer).await.unwrap();
-        let response = String::from_utf8_lossy(&buffer[..n]);
-        assert!(response.starts_with("250"));
+        assert!(String::from_utf8_lossy(&buffer[..n]).starts_with("250"));
 
-        // Send DATA command
         stream.write_all(b"DATA\r\n").await.unwrap();
         let n = stream.read(&mut buffer).await.unwrap();
-        let response = String::from_utf8_lossy(&buffer[..n]);
-        assert!(response.starts_with("354"));
+        assert!(String::from_utf8_lossy(&buffer[..n]).starts_with("354"));
 
-        // Send message body
         stream
             .write_all(b"Subject: Test\r\n\r\nHello, world!\r\n.\r\n")
             .await
             .unwrap();
         let n = stream.read(&mut buffer).await.unwrap();
-        let response = String::from_utf8_lossy(&buffer[..n]);
-        assert!(response.starts_with("250"));
+        assert!(String::from_utf8_lossy(&buffer[..n]).starts_with("250"));
 
-        // Send QUIT command
         stream.write_all(b"QUIT\r\n").await.unwrap();
         let n = stream.read(&mut buffer).await.unwrap();
-        let response = String::from_utf8_lossy(&buffer[..n]);
-        assert!(response.starts_with("221"));
+        assert!(String::from_utf8_lossy(&buffer[..n]).starts_with("221"));
     }
 }
