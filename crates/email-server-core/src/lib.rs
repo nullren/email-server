@@ -61,7 +61,7 @@ mod tests {
 
         let mut stream = TcpStream::connect(server_address).await.unwrap();
         let mut buffer = [0; 1024];
-        stream.read(&mut buffer).await.unwrap();
+        let _ = stream.read(&mut buffer).await.unwrap();
 
         stream.write_all(b"HELO example.com\r\n").await.unwrap();
         let n = stream.read(&mut buffer).await.unwrap();
@@ -75,7 +75,7 @@ mod tests {
 
         let mut stream = TcpStream::connect(server_address).await.unwrap();
         let mut buffer = [0; 1024];
-        stream.read(&mut buffer).await.unwrap();
+        let _ = stream.read(&mut buffer).await.unwrap();
 
         stream.write_all(b"QUIT\r\n").await.unwrap();
         let n = stream.read(&mut buffer).await.unwrap();
@@ -89,7 +89,7 @@ mod tests {
 
         let mut stream = TcpStream::connect(server_address).await.unwrap();
         let mut buffer = [0; 1024];
-        stream.read(&mut buffer).await.unwrap();
+        let _ = stream.read(&mut buffer).await.unwrap();
 
         stream.write_all(b"HELO example.com\r\n").await.unwrap();
         let n = stream.read(&mut buffer).await.unwrap();
