@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use std::pin::Pin;
 use std::{
     error::Error,
@@ -57,16 +58,15 @@ impl ToTcpListener for &str {
     }
 }
 
+#[async_trait]
 pub trait SocketHandler {
-    type Future: Future<Output = Result<(), SocketError>>;
-    fn handle_connection(&mut self, stream: TcpStream) -> Self::Future;
+    async fn handle_connection(&mut self, stream: TcpStream) -> Result<(), SocketError>;
 }
 
 pub async fn run<L, H>(addr: L, handler: H) -> Result<(), SocketError>
 where
     L: ToTcpListener,
     H: SocketHandler + Clone + Send + 'static,
-    <H as SocketHandler>::Future: Send,
 {
     let listener = addr
         .to_tcp_listener()
