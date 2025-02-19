@@ -1,10 +1,11 @@
+use crate::socket::ToTcpListener;
 use std::sync::Arc;
 
 pub mod message;
 pub mod smtp;
 pub mod socket;
 
-pub async fn smtp_server(addr: &str) -> Result<(), socket::SocketError> {
+pub async fn smtp_server<L: ToTcpListener>(addr: L) -> Result<(), socket::SocketError> {
     socket::run(
         addr,
         smtp::Server {
@@ -24,19 +25,17 @@ mod tests {
     static SERVER_ADDRESS: OnceCell<String> = OnceCell::const_new();
 
     async fn start_server() -> String {
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let server_address = listener.local_addr().unwrap().to_string();
-        drop(listener);
+        let addr = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let local_addr = addr.local_addr().unwrap();
 
-        let addr = server_address.clone();
         tokio::spawn(async move {
-            smtp_server(&addr).await.unwrap();
+            smtp_server(addr).await.unwrap();
         });
 
         // Give the server a moment to start
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        server_address
+        local_addr.to_string()
     }
 
     async fn get_server_address() -> &'static str {
