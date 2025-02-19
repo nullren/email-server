@@ -1,9 +1,7 @@
 use async_trait::async_trait;
-use std::pin::Pin;
 use std::{
     error::Error,
     fmt::{Display, Formatter},
-    future::Future,
 };
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task;
@@ -38,23 +36,22 @@ impl From<std::io::Error> for SocketError {
     }
 }
 
+#[async_trait]
 pub trait ToTcpListener {
-    type Future: Future<Output = Result<TcpListener, std::io::Error>>;
-    fn to_tcp_listener(self) -> Self::Future;
+    async fn to_tcp_listener(self) -> Result<TcpListener, std::io::Error>;
 }
 
+#[async_trait]
 impl ToTcpListener for TcpListener {
-    type Future = Pin<Box<dyn Future<Output = Result<TcpListener, std::io::Error>>>>;
-    fn to_tcp_listener(self) -> Self::Future {
-        Box::pin(async move { Ok(self) })
+    async fn to_tcp_listener(self) -> Result<TcpListener, std::io::Error> {
+        Ok(self)
     }
 }
 
+#[async_trait]
 impl ToTcpListener for &str {
-    type Future = Pin<Box<dyn Future<Output = Result<TcpListener, std::io::Error>> + Send>>;
-    fn to_tcp_listener(self) -> Self::Future {
-        let this = self.to_string();
-        Box::pin(async move { TcpListener::bind(this).await })
+    async fn to_tcp_listener(self) -> Result<TcpListener, std::io::Error> {
+        TcpListener::bind(self).await
     }
 }
 
