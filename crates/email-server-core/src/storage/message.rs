@@ -9,7 +9,9 @@ pub struct SqliteStore {
 
 impl SqliteStore {
     pub async fn new(path: impl AsRef<Path>) -> Result<Self, sqlx::Error> {
-        let opts = SqliteConnectOptions::default().filename(path);
+        let opts = SqliteConnectOptions::default()
+            .filename(path)
+            .create_if_missing(true);
         let pool = SqlitePool::connect_with(opts).await?;
         let this = Self { pool };
         this.initialize_table().await?;
