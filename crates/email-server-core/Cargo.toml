@@ -9,3 +9,5 @@ derive_builder = "0.20.2"
 tokio = { version = "1.43.0", features = ["full"] }
 bytes = "1.10.0"
 async-trait = "0.1.86"
+sqlx = { version = "0.8.3", features = ["runtime-tokio", "sqlite"] }
+tempfile = "3.17.1"

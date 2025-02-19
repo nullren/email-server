@@ -4,6 +4,7 @@ use std::sync::Arc;
 pub mod message;
 pub mod smtp;
 pub mod socket;
+pub mod storage;
 
 pub async fn smtp_server<L: ToTcpListener>(addr: L) -> Result<(), socket::SocketError> {
     socket::run(
