@@ -29,7 +29,8 @@ macro_rules! outln {
 }
 
 impl Server {
-    async fn handle_stream(&mut self, stream: TcpStream) -> Result<(), SocketError> {
+    async fn handle_stream(&mut self, mut stream: TcpStream) -> Result<(), SocketError> {
+        outln!(stream, status::Code::ServiceReady);
         let stream = self.require_tls(stream).await?;
         self.handle_message(stream).await
     }
@@ -61,12 +62,11 @@ impl Server {
         // 250 smtp.fastmail.com
         // MAIL FROM: Ren <ren@booger.net>
         // 530 5.7.1 Authentication required
-
+        //
         Ok(stream)
     }
 
     async fn handle_message(&mut self, mut stream: TcpStream) -> Result<(), SocketError> {
-        outln!(stream, status::Code::ServiceReady);
         let mut message = Message::default();
         let mut st = state::new_state();
         let mut buffer = BytesMut::with_capacity(4096);

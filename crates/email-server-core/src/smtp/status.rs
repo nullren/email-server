@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-#[derive(Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum Code {
     ServiceReady,
     StartTLS,
@@ -10,6 +10,7 @@ pub enum Code {
     Goodbye,
     BadSequence,
     Helo,
+    Ehlo,
     EnterMessage,
     MessageSent,
 }
@@ -21,6 +22,7 @@ impl Display for Code {
             Code::StartTLS => write!(f, "220 Start TLS"),
             Code::Goodbye => write!(f, "221 Goodbye"),
             Code::Helo => write!(f, "250 mail.example.com"),
+            Code::Ehlo => write!(f, "250 mail.example.com"),
             Code::Ok => write!(f, "250 OK"),
             Code::MessageSent => write!(f, "250 Message sent"),
             Code::EnterMessage => write!(f, "354 enter mail, end with line containing only \".\""),
