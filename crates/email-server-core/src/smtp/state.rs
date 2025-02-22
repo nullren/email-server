@@ -7,9 +7,22 @@ pub trait SmtpState: Send {
         line: &[u8],
         message: &mut Message,
     ) -> (Option<String>, Option<Box<dyn SmtpState>>);
+
+    fn process(
+        &mut self,
+        line: &[u8],
+        message: &mut Message,
+    ) -> (Option<String>, Option<Box<dyn SmtpState>>) {
+        if !self.is_data_collect() && line.starts_with(b"QUIT") {
+            return (Some(status::Code::Goodbye.to_string()), None);
+        }
+        self.process_line(line, message)
+    }
+
     fn is_data_collect(&self) -> bool {
         false
     }
+
     fn is_done(&self) -> bool {
         false
     }
@@ -19,7 +32,6 @@ pub fn new_state() -> Box<dyn SmtpState + Send> {
     Box::new(InitState)
 }
 
-#[derive(Default)]
 pub struct InitState;
 impl SmtpState for InitState {
     fn process_line(

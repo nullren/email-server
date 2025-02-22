@@ -29,12 +29,12 @@ macro_rules! outln {
 }
 
 impl Server {
-    async fn handle_stream(&mut self, mut stream: TcpStream) -> Result<(), SocketError> {
+    async fn handle_stream(&mut self, stream: TcpStream) -> Result<(), SocketError> {
         let stream = self.require_tls(stream).await?;
         self.handle_message(stream).await
     }
 
-    async fn require_tls(&mut self, mut stream: TcpStream) -> Result<TcpStream, SocketError> {
+    async fn require_tls(&mut self, stream: TcpStream) -> Result<TcpStream, SocketError> {
         // EHLO
         // 250-{{domain}}
         // 250-PIPELINING
@@ -68,7 +68,7 @@ impl Server {
     async fn handle_message(&mut self, mut stream: TcpStream) -> Result<(), SocketError> {
         outln!(stream, status::Code::ServiceReady);
         let mut message = Message::default();
-        let mut state = state::new_state();
+        let mut st = state::new_state();
         let mut buffer = BytesMut::with_capacity(4096);
 
         'outer: loop {
@@ -81,15 +81,10 @@ impl Server {
 
             while let Some(pos) = buffer.windows(2).position(|x| x == b"\r\n") {
                 let buf = buffer.split_to(pos + 2);
-                if !state.is_data_collect() && buf.starts_with(b"QUIT") {
-                    outln!(stream, status::Code::Goodbye);
-                    break 'outer;
-                }
-
-                match state.process_line(&buf, &mut message) {
+                match st.process(&buf, &mut message) {
                     (Some(output), Some(next_state)) => {
                         outln!(stream, output);
-                        state = next_state;
+                        st = next_state;
                     }
                     (Some(output), None) => {
                         outln!(stream, output);
@@ -99,13 +94,13 @@ impl Server {
                 }
 
                 // we don't ever stay in a "Done" state, we just reset
-                if state.is_done() {
+                if st.is_done() {
                     if let Err(e) = self.handler.handle_message(message).await {
                         // we don't want to break the loop, just log the error
                         eprintln!("Error sending message: {}", e);
                     }
                     message = Message::default();
-                    state = state::new_state();
+                    st = state::new_state();
                 }
             }
         }
