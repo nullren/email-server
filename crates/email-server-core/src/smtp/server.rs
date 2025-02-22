@@ -7,6 +7,18 @@ use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
+#[derive(Clone)]
+pub struct Server {
+    pub(crate) handler: Arc<dyn message::Handler + Sync + Send>,
+}
+
+#[async_trait]
+impl SocketHandler for Server {
+    async fn handle_connection(&mut self, stream: TcpStream) -> Result<(), SocketError> {
+        self.handle_stream(stream).await
+    }
+}
+
 macro_rules! outln {
     ($stream:expr, $msg:expr) => {
         $stream.write_all(format!("{}\r\n", $msg).as_bytes()).await?;
@@ -16,18 +28,13 @@ macro_rules! outln {
     };
 }
 
-#[derive(Clone)]
-pub struct Server {
-    pub(crate) handler: Arc<dyn message::Handler + Sync + Send>,
-}
+impl Server {
+    async fn handle_stream(&mut self, mut stream: TcpStream) -> Result<(), SocketError> {
+        let stream = self.require_tls(stream).await?;
+        self.handle_message(stream).await
+    }
 
-#[async_trait]
-impl SocketHandler for Server {
-    // type Future = Pin<Box<dyn Future<Output = Result<(), SocketError>> + Send>>;
-
-    async fn handle_connection(&mut self, stream: TcpStream) -> Result<(), SocketError> {
-        self.handle_tls_connection(stream).await
-
+    async fn require_tls(&mut self, mut stream: TcpStream) -> Result<TcpStream, SocketError> {
         // EHLO
         // 250-{{domain}}
         // 250-PIPELINING
@@ -54,11 +61,11 @@ impl SocketHandler for Server {
         // 250 smtp.fastmail.com
         // MAIL FROM: Ren <ren@booger.net>
         // 530 5.7.1 Authentication required
-    }
-}
 
-impl Server {
-    async fn handle_tls_connection(&mut self, mut stream: TcpStream) -> Result<(), SocketError> {
+        Ok(stream)
+    }
+
+    async fn handle_message(&mut self, mut stream: TcpStream) -> Result<(), SocketError> {
         outln!(stream, status::Code::ServiceReady);
         let mut message = Message::default();
         let mut state = state::new_state();
