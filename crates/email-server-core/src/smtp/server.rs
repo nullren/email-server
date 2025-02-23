@@ -23,39 +23,38 @@ pub struct Server {
 
 #[async_trait]
 impl SocketHandler for Server {
-    // type Future = Pin<Box<dyn Future<Output = Result<(), SocketError>> + Send>>;
-
     async fn handle_connection(&mut self, stream: TcpStream) -> Result<(), SocketError> {
         self.handle_tls_connection(stream).await
-
-        // EHLO
-        // 250-{{domain}}
-        // 250-PIPELINING
-        // 250-SIZE 71000000
-        // 250-ENHANCEDSTATUSCODES
-        // 250-8BITMIME
-        // 250 STARTTLS
-
-        // NOOP
-        // 250 2.0.0 OK
-
-        // QUIT
-        // 221 2.0.0 Bye
-
-        // STARTTLS
-        // 220 2.0.0 Start TLS
-        // # just ignore   501 Syntax error (no parameters allowed)
-        // # don't cont    454 TLS not available due to temporary reason
-
-        // 530 5.7.1 Authentication required
-        // unless NOOP, EHLO, STARTTLS, or QUIT
-
-        // HELO booger.net
-        // 250 smtp.fastmail.com
-        // MAIL FROM: Ren <ren@booger.net>
-        // 530 5.7.1 Authentication required
     }
 }
+
+// TODO: only allow EHLO, NOOP, QUIT, and STARTTLS
+// EHLO
+// 250-{{domain}}
+// 250-PIPELINING
+// 250-SIZE 71000000
+// 250-ENHANCEDSTATUSCODES
+// 250-8BITMIME
+// 250 STARTTLS
+//
+// NOOP
+// 250 2.0.0 OK
+//
+// QUIT
+// 221 2.0.0 Bye
+//
+// STARTTLS
+// 220 2.0.0 Start TLS
+// # just ignore   501 Syntax error (no parameters allowed)
+// # don't cont    454 TLS not available due to temporary reason
+//
+// 530 5.7.1 Authentication required
+// unless NOOP, EHLO, STARTTLS, or QUIT
+//
+// HELO booger.net
+// 250 smtp.fastmail.com
+// MAIL FROM: Ren <ren@booger.net>
+// 530 5.7.1 Authentication required
 
 impl Server {
     async fn handle_tls_connection(&mut self, mut stream: TcpStream) -> Result<(), SocketError> {
