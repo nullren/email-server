@@ -6,7 +6,7 @@ pub trait SmtpState: Send {
         &mut self,
         line: &[u8],
         message: &mut Message,
-    ) -> (Option<String>, Option<Box<dyn SmtpState>>);
+    ) -> (Option<status::Code>, Option<Box<dyn SmtpState>>);
     fn is_data_collect(&self) -> bool {
         false
     }
@@ -26,18 +26,12 @@ impl SmtpState for InitState {
         &mut self,
         line: &[u8],
         message: &mut Message,
-    ) -> (Option<String>, Option<Box<dyn SmtpState>>) {
+    ) -> (Option<status::Code>, Option<Box<dyn SmtpState>>) {
         if line.starts_with(b"HELO") {
             message.sender_domain = String::from_utf8_lossy(&line[5..]).trim().to_string();
-            (
-                Some(status::Code::Helo.to_string()),
-                Some(Box::new(MailState)),
-            )
+            (Some(status::Code::Helo), Some(Box::new(MailState)))
         } else {
-            (
-                Some(status::Code::BadSequence.to_string()),
-                Some(Box::new(InitState)),
-            )
+            (Some(status::Code::BadSequence), Some(Box::new(InitState)))
         }
     }
 }
@@ -48,15 +42,12 @@ impl SmtpState for MailState {
         &mut self,
         line: &[u8],
         message: &mut Message,
-    ) -> (Option<String>, Option<Box<dyn SmtpState>>) {
+    ) -> (Option<status::Code>, Option<Box<dyn SmtpState>>) {
         if line.starts_with(b"MAIL FROM:") {
             message.from = String::from_utf8_lossy(&line[10..]).trim().to_string();
-            (
-                Some(status::Code::Ok.to_string()),
-                Some(Box::new(RcptState)),
-            )
+            (Some(status::Code::Ok), Some(Box::new(RcptState)))
         } else {
-            (Some(status::Code::BadSequence.to_string()), None)
+            (Some(status::Code::BadSequence), None)
         }
     }
 }
@@ -67,19 +58,19 @@ impl SmtpState for RcptState {
         &mut self,
         line: &[u8],
         message: &mut Message,
-    ) -> (Option<String>, Option<Box<dyn SmtpState>>) {
+    ) -> (Option<status::Code>, Option<Box<dyn SmtpState>>) {
         if line.starts_with(b"RCPT TO:") {
             message
                 .to
                 .push(String::from_utf8_lossy(&line[8..]).trim().to_string());
-            (Some("250 OK".to_string()), Some(Box::new(RcptState)))
+            (Some(status::Code::Ok), Some(Box::new(RcptState)))
         } else if line == b"DATA" {
             (
-                Some(status::Code::EnterMessage.to_string()),
+                Some(status::Code::EnterMessage),
                 Some(Box::new(DataCollectState)),
             )
         } else {
-            (Some(status::Code::BadSequence.to_string()), None)
+            (Some(status::Code::BadSequence), None)
         }
     }
 }
@@ -90,12 +81,9 @@ impl SmtpState for DataCollectState {
         &mut self,
         line: &[u8],
         message: &mut Message,
-    ) -> (Option<String>, Option<Box<dyn SmtpState>>) {
+    ) -> (Option<status::Code>, Option<Box<dyn SmtpState>>) {
         if line == b"." {
-            (
-                Some(status::Code::MessageSent.to_string()),
-                Some(Box::new(DoneState)),
-            )
+            (Some(status::Code::MessageSent), Some(Box::new(DoneState)))
         } else {
             message.data.extend_from_slice(line);
             (None, None)
@@ -112,8 +100,8 @@ impl SmtpState for DoneState {
         &mut self,
         _line: &[u8],
         _message: &mut Message,
-    ) -> (Option<String>, Option<Box<dyn SmtpState>>) {
-        (Some(status::Code::BadSequence.to_string()), None)
+    ) -> (Option<status::Code>, Option<Box<dyn SmtpState>>) {
+        (Some(status::Code::BadSequence), None)
     }
     fn is_done(&self) -> bool {
         true
