@@ -118,7 +118,7 @@ mod tests {
         let mut msg = Message::default();
         let mut state = InitState {};
         let (resp, next) = state.process_line(b"HELO example.com", &mut msg);
-        assert_eq!(resp, Some(status::Code::Helo.to_string()));
+        assert_eq!(resp, Some(status::Code::Helo));
         assert_eq!(msg.sender_domain, "example.com");
         assert!(next.is_some());
     }
@@ -128,7 +128,7 @@ mod tests {
         let mut msg = Message::default();
         let mut state = MailState {};
         let (resp, next) = state.process_line(b"MAIL FROM: <sender@example>", &mut msg);
-        assert_eq!(resp, Some(status::Code::Ok.to_string()));
+        assert_eq!(resp, Some(status::Code::Ok));
         assert_eq!(msg.from, "<sender@example>");
         assert!(next.is_some());
     }
@@ -138,7 +138,7 @@ mod tests {
         let mut msg = Message::default();
         let mut state = RcptState {};
         let (resp, next) = state.process_line(b"RCPT TO: <recipient@example>", &mut msg);
-        assert_eq!(resp, Some(status::Code::Ok.to_string()));
+        assert_eq!(resp, Some(status::Code::Ok));
         assert_eq!(msg.to, vec!["<recipient@example>".to_string()]);
         assert!(next.is_some());
     }
@@ -148,7 +148,7 @@ mod tests {
         let mut msg = Message::default();
         let mut state = RcptState {};
         let (resp, next) = state.process_line(b"DATA", &mut msg);
-        assert_eq!(resp, Some(status::Code::EnterMessage.to_string()));
+        assert_eq!(resp, Some(status::Code::EnterMessage));
         assert!(next.is_some());
     }
 
@@ -163,7 +163,7 @@ mod tests {
         assert_eq!(resp, None);
         assert!(next.is_none());
         let (resp, next) = state.process_line(b".", &mut msg);
-        assert_eq!(resp, Some(status::Code::MessageSent.to_string()));
+        assert_eq!(resp, Some(status::Code::MessageSent));
         assert!(next.is_some());
     }
 
@@ -172,7 +172,7 @@ mod tests {
         let mut msg = Message::default();
         let mut state = DoneState {};
         let (resp, next) = state.process_line(b"QUIT", &mut msg);
-        assert_eq!(resp, Some(status::Code::BadSequence.to_string()));
+        assert_eq!(resp, Some(status::Code::BadSequence));
         assert!(next.is_none());
         assert!(state.is_done());
     }
