@@ -37,7 +37,7 @@ mod tests {
 
         tokio::spawn(async move {
             if let Err(e) = smtp_server(listener, temp_file.path()).await {
-                eprintln!("SMTP Server Error: {}", e);
+                tracing::error!("SMTP Server Error: {}", e);
             }
         });
 

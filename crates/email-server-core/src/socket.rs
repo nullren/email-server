@@ -69,14 +69,14 @@ where
         .to_tcp_listener()
         .await
         .map_err(SocketError::BindFailed)?;
-    println!("SMTP Server listening on {}", listener.local_addr()?);
+    tracing::info!("SMTP Server listening on {}", listener.local_addr()?);
 
     loop {
         let (socket, addr) = listener
             .accept()
             .await
             .map_err(SocketError::ConnectionFailed)?;
-        println!("New connection: {}", addr);
+        tracing::info!("New connection: {}", addr);
 
         let mut handler = handler.clone();
         let start = Instant::now();
@@ -84,9 +84,9 @@ where
         task::spawn(async move {
             match handler.handle_connection(socket).await {
                 Ok(_) => {}
-                Err(e) => eprintln!("Error: {}", e),
+                Err(e) => tracing::error!("failed to handle connection: {}", e),
             }
-            println!("Connection closed in {} ms", start.elapsed().as_millis());
+            tracing::info!("Connection closed in {} ms", start.elapsed().as_millis());
         });
     }
 }

@@ -20,7 +20,7 @@ pub struct PrintHandler;
 #[async_trait]
 impl Handler for PrintHandler {
     async fn handle_message(&self, message: Message) -> Result<(), Box<dyn Error>> {
-        println!(
+        tracing::debug!(
             "Received message from {} to {} with {} bytes of data",
             message.from,
             message.to.join(", "),
