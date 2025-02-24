@@ -82,11 +82,15 @@ where
         let start = Instant::now();
 
         task::spawn(async move {
+            let conn_id = uuid::Uuid::new_v4();
+            let peer = socket.peer_addr().unwrap().to_string();
+            let span = tracing::info_span!("socket", id = %conn_id, peer);
+            let _guard = span.enter();
             match handler.handle_connection(socket).await {
                 Ok(_) => {}
                 Err(e) => tracing::error!("failed to handle connection: {}", e),
             }
-            tracing::info!("Connection closed in {} ms", start.elapsed().as_millis());
+            tracing::info!("Closing after {} ms", start.elapsed().as_millis());
         });
     }
 }
