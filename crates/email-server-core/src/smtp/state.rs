@@ -1,7 +1,8 @@
 use crate::message::Message;
 use crate::smtp::status;
+use std::fmt::Debug;
 
-pub trait SmtpState: Send {
+pub trait SmtpState: Send + Debug {
     fn process_line(
         &mut self,
         line: &[u8],
@@ -19,7 +20,7 @@ pub fn new_state() -> Box<dyn SmtpState + Send> {
     Box::new(InitState)
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct InitState;
 impl SmtpState for InitState {
     fn process_line(
@@ -36,6 +37,7 @@ impl SmtpState for InitState {
     }
 }
 
+#[derive(Default, Debug)]
 pub struct MailState;
 impl SmtpState for MailState {
     fn process_line(
@@ -52,6 +54,7 @@ impl SmtpState for MailState {
     }
 }
 
+#[derive(Default, Debug)]
 pub struct RcptState;
 impl SmtpState for RcptState {
     fn process_line(
@@ -75,6 +78,7 @@ impl SmtpState for RcptState {
     }
 }
 
+#[derive(Default, Debug)]
 pub struct DataCollectState;
 impl SmtpState for DataCollectState {
     fn process_line(
@@ -94,6 +98,7 @@ impl SmtpState for DataCollectState {
     }
 }
 
+#[derive(Default, Debug)]
 pub struct DoneState;
 impl SmtpState for DoneState {
     fn process_line(

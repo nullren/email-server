@@ -144,6 +144,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_pipeline_message() {
+        crate::logging::setup();
         let server_address = start_server().await;
 
         let mut stream = TcpStream::connect(server_address).await.unwrap();
@@ -154,6 +155,8 @@ mod tests {
             .await
             .unwrap();
         let n = stream.read(&mut buffer).await.unwrap();
-        assert_eq!(String::from_utf8_lossy(&buffer[..n]), "250 mail.example.com\r\n250 OK\r\n250 OK\r\n354 enter mail, end with line containing only \".\"\r\n250 Message sent\r\n");
+        let output = String::from_utf8_lossy(&buffer[..n]);
+        tracing::debug!("Read: {:?}", output);
+        assert_eq!(output, "250 mail.example.com\r\n250 OK\r\n250 OK\r\n354 enter mail, end with line containing only \".\"\r\n250 Message sent\r\n221 Goodbye\r\n");
     }
 }

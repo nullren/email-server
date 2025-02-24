@@ -62,12 +62,12 @@ impl Server {
     async fn handle_tls_connection(&mut self, mut stream: TcpStream) -> Result<(), SocketError> {
         outln!(stream, status::Code::ServiceReady);
         let (reader, mut writer) = stream.into_split();
-        let mut framed = FramedRead::new(reader, LinesCodec::new());
+        let mut lines = FramedRead::new(reader, LinesCodec::new());
 
         let mut message = Message::default();
         let mut state = state::new_state();
 
-        while let Some(line) = framed.next().await {
+        while let Some(line) = lines.next().await {
             let line = line.map_err(|e| SocketError::BoxError(Box::new(e)))?;
             debug!("received: {:?}", line);
 
@@ -87,6 +87,8 @@ impl Server {
                 }
                 (None, _) => {}
             }
+
+            debug!("state: {:?}", state);
 
             // we don't ever stay in a "Done" state, we just reset
             if state.is_done() {
