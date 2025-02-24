@@ -3,6 +3,7 @@ use crate::socket::{SocketError, ToTcpListener};
 use std::path::Path;
 use std::sync::Arc;
 
+pub mod logging;
 pub mod message;
 pub mod smtp;
 pub mod socket;
@@ -50,6 +51,14 @@ mod tests {
         }
 
         panic!("Server failed to start");
+    }
+
+    #[test]
+    fn test_logging() {
+        crate::logging::setup();
+        tracing::info!("This should appear in test output!");
+        tracing::debug!("Debug message from a test!");
+        assert_eq!(2 + 2, 4);
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
