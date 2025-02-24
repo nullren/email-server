@@ -141,4 +141,19 @@ mod tests {
         let n = stream.read(&mut buffer).await.unwrap();
         assert!(String::from_utf8_lossy(&buffer[..n]).starts_with("221"));
     }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_pipeline_message() {
+        let server_address = start_server().await;
+
+        let mut stream = TcpStream::connect(server_address).await.unwrap();
+        let mut buffer = [0; 1024];
+        let _ = stream.read(&mut buffer).await.unwrap();
+
+        stream.write_all(b"HELO example.com\r\nMAIL FROM: Alice <Alice@example.com>\r\nRCPT TO: Bob <bob@example.com>\r\nDATA\r\nSubject: Test\r\n\r\nHello, world!\r\n.\r\nQUIT\r\n")
+            .await
+            .unwrap();
+        let n = stream.read(&mut buffer).await.unwrap();
+        assert_eq!(String::from_utf8_lossy(&buffer[..n]), "250 mail.example.com\r\n250 OK\r\n250 OK\r\n354 enter mail, end with line containing only \".\"\r\n250 Message sent\r\n");
+    }
 }
