@@ -2,30 +2,31 @@ name: Rust
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 env:
   CARGO_TERM_COLOR: always
 jobs:
   ci:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     container:
       image: rust:1
     steps:
-    - uses: actions/checkout@v4
-    - name: Install rust dependencies
-      run: rustup component add rustfmt clippy
-    - name: Install cargo dependencies
-      run: cargo install cargo-deny
-    - name: Formatted correctly
-      run: cargo fmt --check
-    - name: Clippy happy
-      run: cargo clippy
-    - name: Build works
-      run: cargo build --verbose
-    - name: Tests pass
-      run: cargo test --verbose
-    - name: Licenses allowed
-      run: cargo deny check
-
+      - uses: actions/checkout@v4
+      - name: Install rust dependencies
+        run: rustup component add rustfmt clippy
+      - name: Install cargo dependencies
+        run: cargo install cargo-deny
+      - name: Formatted correctly
+        run: cargo fmt --check
+      - name: Clippy happy
+        run: cargo clippy
+      - name: Build works
+        run: cargo build --verbose
+      - name: Tests pass
+        run: cargo test --verbose
+      - name: Licenses allowed
+        run: cargo deny check
