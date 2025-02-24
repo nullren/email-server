@@ -5,6 +5,6 @@ edition = "2021"
 license.workspace = true
 
 [dependencies]
-clap = { version = "4.5.29", features = ["derive", "env"] }
+clap = { version = "4.5.30", features = ["derive", "env"] }
 email-server-core = { path = "../email-server-core" }
 tokio = { version = "1.43.0", features = ["full"] }
