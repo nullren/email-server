@@ -2,10 +2,12 @@ use crate::message::{self, Message};
 use crate::smtp::{state, status};
 use crate::socket::{SocketError, SocketHandler};
 use async_trait::async_trait;
-use bytes::BytesMut;
+use futures::StreamExt;
 use std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
+use tokio_util::codec::{FramedRead, LinesCodec};
+use tracing::debug;
 
 macro_rules! outln {
     ($stream:expr, $msg:expr) => {
@@ -23,85 +25,80 @@ pub struct Server {
 
 #[async_trait]
 impl SocketHandler for Server {
-    // type Future = Pin<Box<dyn Future<Output = Result<(), SocketError>> + Send>>;
-
     async fn handle_connection(&mut self, stream: TcpStream) -> Result<(), SocketError> {
         self.handle_tls_connection(stream).await
-
-        // EHLO
-        // 250-{{domain}}
-        // 250-PIPELINING
-        // 250-SIZE 71000000
-        // 250-ENHANCEDSTATUSCODES
-        // 250-8BITMIME
-        // 250 STARTTLS
-
-        // NOOP
-        // 250 2.0.0 OK
-
-        // QUIT
-        // 221 2.0.0 Bye
-
-        // STARTTLS
-        // 220 2.0.0 Start TLS
-        // # just ignore   501 Syntax error (no parameters allowed)
-        // # don't cont    454 TLS not available due to temporary reason
-
-        // 530 5.7.1 Authentication required
-        // unless NOOP, EHLO, STARTTLS, or QUIT
-
-        // HELO booger.net
-        // 250 smtp.fastmail.com
-        // MAIL FROM: Ren <ren@booger.net>
-        // 530 5.7.1 Authentication required
     }
 }
+
+// TODO: only allow EHLO, NOOP, QUIT, and STARTTLS
+// EHLO
+// 250-{{domain}}
+// 250-PIPELINING
+// 250-SIZE 71000000
+// 250-ENHANCEDSTATUSCODES
+// 250-8BITMIME
+// 250 STARTTLS
+//
+// NOOP
+// 250 2.0.0 OK
+//
+// QUIT
+// 221 2.0.0 Bye
+//
+// STARTTLS
+// 220 2.0.0 Start TLS
+// # just ignore   501 Syntax error (no parameters allowed)
+// # don't cont    454 TLS not available due to temporary reason
+//
+// 530 5.7.1 Authentication required
+// unless NOOP, EHLO, STARTTLS, or QUIT
+//
+// HELO booger.net
+// 250 smtp.fastmail.com
+// MAIL FROM: Ren <ren@booger.net>
+// 530 5.7.1 Authentication required
 
 impl Server {
     async fn handle_tls_connection(&mut self, mut stream: TcpStream) -> Result<(), SocketError> {
         outln!(stream, status::Code::ServiceReady);
+        let (reader, mut writer) = stream.into_split();
+        let mut framed = FramedRead::new(reader, LinesCodec::new());
+
         let mut message = Message::default();
         let mut state = state::new_state();
-        let mut buffer = BytesMut::with_capacity(4096);
 
-        'outer: loop {
-            let mut temp = [0; 1024];
-            let n = stream.read(&mut temp).await?;
-            if n == 0 {
-                break 'outer;
+        while let Some(line) = framed.next().await {
+            let line = line.map_err(|e| SocketError::BoxError(Box::new(e)))?;
+            debug!("received: {:?}", line);
+
+            if !state.is_data_collect() && line.starts_with("QUIT") {
+                outln!(writer, status::Code::Goodbye);
+                break;
             }
-            buffer.extend_from_slice(&temp[..n]);
 
-            while let Some(pos) = buffer.windows(2).position(|x| x == b"\r\n") {
-                let buf = buffer.split_to(pos + 2);
-                if !state.is_data_collect() && buf.starts_with(b"QUIT") {
-                    outln!(stream, status::Code::Goodbye);
-                    break 'outer;
+            match state.process_line(line.as_bytes(), &mut message) {
+                (Some(output), Some(next_state)) => {
+                    outln!(writer, output);
+                    state = next_state;
                 }
+                (Some(output), None) => {
+                    outln!(writer, output);
+                    break;
+                }
+                (None, _) => {}
+            }
 
-                match state.process_line(&buf, &mut message) {
-                    (Some(output), Some(next_state)) => {
-                        outln!(stream, output);
-                        state = next_state;
-                    }
-                    (Some(output), None) => {
-                        outln!(stream, output);
-                        break 'outer;
-                    }
-                    (None, _) => {}
+            // we don't ever stay in a "Done" state, we just reset
+            if state.is_done() {
+                if let Err(e) = self.handler.handle_message(message).await {
+                    // we don't want to break the loop, just log the error
+                    eprintln!("Error sending message: {}", e);
                 }
-
-                // we don't ever stay in a "Done" state, we just reset
-                if state.is_done() {
-                    if let Err(e) = self.handler.handle_message(message).await {
-                        // we don't want to break the loop, just log the error
-                        eprintln!("Error sending message: {}", e);
-                    }
-                    message = Message::default();
-                    state = state::new_state();
-                }
+                message = Message::default();
+                state = state::new_state();
             }
         }
+
         Ok(())
     }
 }
