@@ -61,6 +61,7 @@ impl SocketHandler for Server {
 impl Server {
     async fn handle_tls_connection(&mut self, mut stream: TcpStream) -> Result<(), SocketError> {
         outln!(stream, status::Code::ServiceReady);
+
         let (reader, mut writer) = stream.into_split();
         let mut lines = FramedRead::new(reader, LinesCodec::new());
 
@@ -71,12 +72,7 @@ impl Server {
             let line = line.map_err(|e| SocketError::BoxError(Box::new(e)))?;
             debug!("received: {:?}", line);
 
-            if !state.is_data_collect() && line.starts_with("QUIT") {
-                outln!(writer, status::Code::Goodbye);
-                break;
-            }
-
-            match state.process_line(line.as_bytes(), &mut message) {
+            match state.process(line.as_bytes(), &mut message) {
                 (Some(output), Some(next_state)) => {
                     outln!(writer, output);
                     state = next_state;
@@ -90,8 +86,7 @@ impl Server {
 
             debug!("state: {:?}", state);
 
-            // we don't ever stay in a "Done" state, we just reset
-            if state.is_done() {
+            if state.is_message_completed() {
                 if let Err(e) = self.handler.handle_message(message).await {
                     // we don't want to break the loop, just log the error
                     eprintln!("Error sending message: {}", e);

@@ -8,10 +8,20 @@ pub trait SmtpState: Send + Debug {
         line: &[u8],
         message: &mut Message,
     ) -> (Option<status::Code>, Option<Box<dyn SmtpState>>);
-    fn is_data_collect(&self) -> bool {
+    fn process(
+        &mut self,
+        line: &[u8],
+        message: &mut Message,
+    ) -> (Option<status::Code>, Option<Box<dyn SmtpState>>) {
+        if !self.is_collecting_data() && line.starts_with(b"QUIT") {
+            return (Some(status::Code::Goodbye), None);
+        }
+        self.process_line(line, message)
+    }
+    fn is_collecting_data(&self) -> bool {
         false
     }
-    fn is_done(&self) -> bool {
+    fn is_message_completed(&self) -> bool {
         false
     }
 }
@@ -87,20 +97,20 @@ impl SmtpState for DataCollectState {
         message: &mut Message,
     ) -> (Option<status::Code>, Option<Box<dyn SmtpState>>) {
         if line == b"." {
-            (Some(status::Code::MessageSent), Some(Box::new(DoneState)))
+            (
+                Some(status::Code::MessageSent),
+                Some(Box::new(MessageCompleted)),
+            )
         } else {
             message.data.extend_from_slice(line);
-            (None, None)
+            (None, Some(Box::new(DataCollectState)))
         }
-    }
-    fn is_data_collect(&self) -> bool {
-        true
     }
 }
 
 #[derive(Default, Debug)]
-pub struct DoneState;
-impl SmtpState for DoneState {
+pub struct MessageCompleted;
+impl SmtpState for MessageCompleted {
     fn process_line(
         &mut self,
         _line: &[u8],
@@ -108,7 +118,7 @@ impl SmtpState for DoneState {
     ) -> (Option<status::Code>, Option<Box<dyn SmtpState>>) {
         (Some(status::Code::BadSequence), None)
     }
-    fn is_done(&self) -> bool {
+    fn is_message_completed(&self) -> bool {
         true
     }
 }
@@ -162,11 +172,11 @@ mod tests {
         let mut msg = Message::default();
         let mut state = DataCollectState {};
         let (resp, next) = state.process_line(b"Hello", &mut msg);
-        assert_eq!(resp, None);
-        assert!(next.is_none());
+        assert!(resp.is_none());
+        assert!(next.is_some());
         let (resp, next) = state.process_line(b"World", &mut msg);
-        assert_eq!(resp, None);
-        assert!(next.is_none());
+        assert!(resp.is_none());
+        assert!(next.is_some());
         let (resp, next) = state.process_line(b".", &mut msg);
         assert_eq!(resp, Some(status::Code::MessageSent));
         assert!(next.is_some());
@@ -175,10 +185,10 @@ mod tests {
     #[test]
     fn test_done_state() {
         let mut msg = Message::default();
-        let mut state = DoneState {};
+        let mut state = MessageCompleted {};
         let (resp, next) = state.process_line(b"QUIT", &mut msg);
         assert_eq!(resp, Some(status::Code::BadSequence));
         assert!(next.is_none());
-        assert!(state.is_done());
+        assert!(state.is_message_completed());
     }
 }
