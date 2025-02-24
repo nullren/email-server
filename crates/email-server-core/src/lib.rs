@@ -156,7 +156,8 @@ mod tests {
 
         tracing::debug!("Sending: {}", String::from_utf8_lossy(input));
         stream.write_all(input).await.unwrap();
-        let n = stream.read(&mut buffer).await.unwrap();
+        let mut buffer = Vec::new();
+        let n = stream.read_to_end(&mut buffer).await.unwrap();
         let output = String::from_utf8_lossy(&buffer[..n]);
         tracing::debug!("Read: {:?}", output);
         assert_eq!(output, expected);
