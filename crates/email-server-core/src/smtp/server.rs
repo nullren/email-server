@@ -71,20 +71,19 @@ impl Server {
             let line = line.map_err(|e| SocketError::BoxError(Box::new(e)))?;
             tracing::debug!("received: {:?}", line);
 
-            match state.process(line.as_bytes(), &mut message) {
-                (Some(output), Some(next_state)) => {
-                    outln!(writer, output);
-                    state = next_state;
-                }
-                (Some(output), None) => {
-                    outln!(writer, output);
-                    break;
-                }
-                (None, _) => {}
+            let (output, next_state) = state.process(line.as_bytes(), &mut message);
+
+            if let Some(output) = output {
+                outln!(writer, output);
+            }
+
+            if let Some(next_state) = next_state {
+                state = next_state;
+            } else {
+                break;
             }
 
             tracing::debug!("state: {:?}", state);
-
             if state.is_message_completed() {
                 if let Err(e) = self.handler.handle_message(message).await {
                     // we don't want to break the loop, just log the error
