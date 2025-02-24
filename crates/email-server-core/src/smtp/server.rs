@@ -7,7 +7,6 @@ use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 use tokio_util::codec::{FramedRead, LinesCodec};
-use tracing::debug;
 
 macro_rules! outln {
     ($stream:expr, $msg:expr) => {
@@ -70,7 +69,7 @@ impl Server {
 
         while let Some(line) = lines.next().await {
             let line = line.map_err(|e| SocketError::BoxError(Box::new(e)))?;
-            debug!("received: {:?}", line);
+            tracing::debug!("received: {:?}", line);
 
             match state.process(line.as_bytes(), &mut message) {
                 (Some(output), Some(next_state)) => {
@@ -84,12 +83,12 @@ impl Server {
                 (None, _) => {}
             }
 
-            debug!("state: {:?}", state);
+            tracing::debug!("state: {:?}", state);
 
             if state.is_message_completed() {
                 if let Err(e) = self.handler.handle_message(message).await {
                     // we don't want to break the loop, just log the error
-                    eprintln!("Error sending message: {}", e);
+                    tracing::error!("Error sending message: {}", e);
                 }
                 message = Message::default();
                 state = state::new_state();
