@@ -8,16 +8,23 @@ pub trait SmtpState: Send + Debug {
         line: &[u8],
         message: &mut Message,
     ) -> (Option<status::Code>, Option<Box<dyn SmtpState>>);
+
     fn process(
         &mut self,
         line: &[u8],
         message: &mut Message,
     ) -> (Option<status::Code>, Option<Box<dyn SmtpState>>) {
         if !self.is_collecting_data() && line.starts_with(b"QUIT") {
-            return (Some(status::Code::Goodbye), None);
+            (Some(status::Code::Goodbye), None)
+        } else if self.is_message_completed() {
+            // reset the state
+            let mut init = new_state();
+            init.process_line(line, message)
+        } else {
+            self.process_line(line, message)
         }
-        self.process_line(line, message)
     }
+
     fn is_collecting_data(&self) -> bool {
         false
     }

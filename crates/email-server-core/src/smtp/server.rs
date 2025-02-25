@@ -69,28 +69,22 @@ impl Server {
 
         while let Some(line) = lines.next().await {
             let line = line.map_err(SocketError::boxed)?;
-            tracing::debug!("received: {:?}", line);
+            tracing::debug!("state = {:?}; received: {:?}", state, line);
 
-            let (output, next_state) = state.process(line.as_bytes(), &mut message);
-
-            if let Some(output) = output {
+            if let (Some(output), next_state) = state.process(line.as_bytes(), &mut message) {
                 outln!(writer, output);
+                if let Some(next_state) = next_state {
+                    state = next_state;
+                } else {
+                    break;
+                }
             }
 
-            if let Some(next_state) = next_state {
-                state = next_state;
-            } else {
-                break;
-            }
-
-            tracing::debug!("state: {:?}", state);
             if state.is_message_completed() {
                 if let Err(e) = self.handler.handle_message(message).await {
-                    // we don't want to break the loop, just log the error
-                    tracing::error!("Error sending message: {}", e);
+                    tracing::error!("Error handling message: {:?}", e);
                 }
                 message = Message::default();
-                state = state::new_state();
             }
         }
 
