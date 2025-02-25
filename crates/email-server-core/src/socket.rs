@@ -78,19 +78,18 @@ where
     tracing::info!("SMTP Server listening on {}", listener.local_addr()?);
 
     loop {
-        let (socket, addr) = listener
+        let (socket, peer_addr) = listener
             .accept()
             .await
             .map_err(SocketError::ConnectionFailed)?;
-        tracing::info!("New connection: {}", addr);
+        tracing::info!("New connection: {}", peer_addr);
 
         let mut handler = handler.clone();
         let start = Instant::now();
 
         task::spawn(async move {
             let conn_id = uuid::Uuid::new_v4();
-            let peer = socket.peer_addr().unwrap().to_string();
-            let span = tracing::info_span!("socket", id = %conn_id, peer);
+            let span = tracing::info_span!("socket", id = %conn_id, peer = %peer_addr);
             let _guard = span.enter();
             match handler.handle_connection(socket).await {
                 Ok(_) => {}
