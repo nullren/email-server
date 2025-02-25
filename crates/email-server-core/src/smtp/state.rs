@@ -1,15 +1,18 @@
+use async_trait::async_trait;
+
 use crate::message::Message;
 use crate::smtp::status;
 use std::fmt::Debug;
 
+#[async_trait]
 pub trait SmtpState: Send + Debug {
-    fn process_line(
+    async fn process_line(
         &mut self,
         line: &[u8],
         message: &mut Message,
     ) -> (Option<status::Code>, Option<Box<dyn SmtpState>>);
 
-    fn process(
+    async fn process(
         &mut self,
         line: &[u8],
         message: &mut Message,
@@ -19,9 +22,9 @@ pub trait SmtpState: Send + Debug {
         } else if self.is_message_completed() {
             // reset the state
             let mut init = new_state();
-            init.process_line(line, message)
+            init.process_line(line, message).await
         } else {
-            self.process_line(line, message)
+            self.process_line(line, message).await
         }
     }
 
@@ -39,8 +42,9 @@ pub fn new_state() -> Box<dyn SmtpState + Send> {
 
 #[derive(Default, Debug)]
 pub struct InitState;
+#[async_trait]
 impl SmtpState for InitState {
-    fn process_line(
+    async fn process_line(
         &mut self,
         line: &[u8],
         message: &mut Message,
@@ -56,8 +60,9 @@ impl SmtpState for InitState {
 
 #[derive(Default, Debug)]
 pub struct MailState;
+#[async_trait]
 impl SmtpState for MailState {
-    fn process_line(
+    async fn process_line(
         &mut self,
         line: &[u8],
         message: &mut Message,
@@ -73,8 +78,9 @@ impl SmtpState for MailState {
 
 #[derive(Default, Debug)]
 pub struct RcptState;
+#[async_trait]
 impl SmtpState for RcptState {
-    fn process_line(
+    async fn process_line(
         &mut self,
         line: &[u8],
         message: &mut Message,
@@ -97,8 +103,9 @@ impl SmtpState for RcptState {
 
 #[derive(Default, Debug)]
 pub struct DataCollectState;
+#[async_trait]
 impl SmtpState for DataCollectState {
-    fn process_line(
+    async fn process_line(
         &mut self,
         line: &[u8],
         message: &mut Message,
@@ -117,8 +124,9 @@ impl SmtpState for DataCollectState {
 
 #[derive(Default, Debug)]
 pub struct MessageCompleted;
+#[async_trait]
 impl SmtpState for MessageCompleted {
-    fn process_line(
+    async fn process_line(
         &mut self,
         _line: &[u8],
         _message: &mut Message,
@@ -135,65 +143,69 @@ mod tests {
     use super::*;
     use crate::message::Message;
 
-    #[test]
-    fn test_init_state_helo() {
+    #[tokio::test]
+    async fn test_init_state_helo() {
         let mut msg = Message::default();
         let mut state = InitState {};
-        let (resp, next) = state.process_line(b"HELO example.com", &mut msg);
+        let (resp, next) = state.process_line(b"HELO example.com", &mut msg).await;
         assert_eq!(resp, Some(status::Code::Helo));
         assert_eq!(msg.sender_domain, "example.com");
         assert!(next.is_some());
     }
 
-    #[test]
-    fn test_mail_state_from() {
+    #[tokio::test]
+    async fn test_mail_state_from() {
         let mut msg = Message::default();
         let mut state = MailState {};
-        let (resp, next) = state.process_line(b"MAIL FROM: <sender@example>", &mut msg);
+        let (resp, next) = state
+            .process_line(b"MAIL FROM: <sender@example>", &mut msg)
+            .await;
         assert_eq!(resp, Some(status::Code::Ok));
         assert_eq!(msg.from, "<sender@example>");
         assert!(next.is_some());
     }
 
-    #[test]
-    fn test_rcpt_state_to() {
+    #[tokio::test]
+    async fn test_rcpt_state_to() {
         let mut msg = Message::default();
         let mut state = RcptState {};
-        let (resp, next) = state.process_line(b"RCPT TO: <recipient@example>", &mut msg);
+        let (resp, next) = state
+            .process_line(b"RCPT TO: <recipient@example>", &mut msg)
+            .await;
         assert_eq!(resp, Some(status::Code::Ok));
         assert_eq!(msg.to, vec!["<recipient@example>".to_string()]);
         assert!(next.is_some());
     }
 
-    #[test]
-    fn test_data_state() {
+    #[tokio::test]
+    async fn test_data_state() {
         let mut msg = Message::default();
         let mut state = RcptState {};
-        let (resp, next) = state.process_line(b"DATA", &mut msg);
+        let (resp, next) = state.process_line(b"DATA", &mut msg).await;
         assert_eq!(resp, Some(status::Code::EnterMessage));
         assert!(next.is_some());
     }
 
-    #[test]
-    fn test_data_collect_state() {
+    #[tokio::test]
+    async fn test_data_collect_state() {
         let mut msg = Message::default();
         let mut state = DataCollectState {};
-        let (resp, next) = state.process_line(b"Hello", &mut msg);
+        let (resp, next) = state.process_line(b"Hello", &mut msg).await;
         assert!(resp.is_none());
         assert!(next.is_some());
-        let (resp, next) = state.process_line(b"World", &mut msg);
+        let (resp, next) = state.process_line(b"World", &mut msg).await;
         assert!(resp.is_none());
         assert!(next.is_some());
-        let (resp, next) = state.process_line(b".", &mut msg);
+        let (resp, next) = state.process_line(b".", &mut msg).await;
         assert_eq!(resp, Some(status::Code::MessageSent));
         assert!(next.is_some());
     }
 
-    #[test]
-    fn test_done_state() {
+    #[tokio::test]
+    async fn test_done_state() {
         let mut msg = Message::default();
         let mut state = MessageCompleted {};
-        let (resp, next) = state.process_line(b"QUIT", &mut msg);
+        let (resp, next) = state.process_line(b"QUIT", &mut msg).await;
         assert_eq!(resp, Some(status::Code::BadSequence));
         assert!(next.is_none());
         assert!(state.is_message_completed());

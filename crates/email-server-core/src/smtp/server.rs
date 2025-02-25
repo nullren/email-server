@@ -71,7 +71,7 @@ impl Server {
             let line = line.map_err(SocketError::boxed)?;
             tracing::debug!("state = {:?}; received: {:?}", state, line);
 
-            if let (Some(output), next_state) = state.process(line.as_bytes(), &mut message) {
+            if let (Some(output), next_state) = state.process(line.as_bytes(), &mut message).await {
                 outln!(writer, output);
                 if let Some(next_state) = next_state {
                     state = next_state;
