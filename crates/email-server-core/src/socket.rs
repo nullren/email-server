@@ -16,6 +16,12 @@ pub enum SocketError {
     Closed,
 }
 
+impl SocketError {
+    pub fn boxed<E: Error + 'static>(err: E) -> Self {
+        SocketError::BoxError(Box::new(err))
+    }
+}
+
 impl Display for SocketError {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {

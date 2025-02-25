@@ -68,7 +68,7 @@ impl Server {
         let mut state = state::new_state();
 
         while let Some(line) = lines.next().await {
-            let line = line.map_err(|e| SocketError::BoxError(Box::new(e)))?;
+            let line = line.map_err(SocketError::boxed)?;
             tracing::debug!("received: {:?}", line);
 
             let (output, next_state) = state.process(line.as_bytes(), &mut message);

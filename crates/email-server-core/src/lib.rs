@@ -17,7 +17,7 @@ pub async fn smtp_server<L: ToTcpListener, P: AsRef<Path>>(
     let storage_handler = Box::new(
         storage::SqliteStore::new(sqlite_db)
             .await
-            .map_err(|e| SocketError::BoxError(e.into()))?,
+            .map_err(SocketError::boxed)?,
     );
     let handler = Arc::new(message::multi_handler(vec![print_handler, storage_handler]));
     socket::run(addr, smtp::Server { handler }).await
