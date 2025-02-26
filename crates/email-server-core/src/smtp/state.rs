@@ -45,7 +45,7 @@ pub fn new_state() -> Box<dyn SmtpState + Send> {
 
 #[derive(Debug)]
 pub struct InitState {
-    validator: Arc<NoopValidator>,
+    validator: Arc<dyn HeloValidator>,
 }
 impl Default for InitState {
     fn default() -> Self {
