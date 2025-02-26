@@ -3,6 +3,9 @@ use async_trait::async_trait;
 use crate::message::Message;
 use crate::smtp::status;
 use std::fmt::Debug;
+use std::sync::Arc;
+
+use super::validator::{HeloValidator, NoopValidator};
 
 #[async_trait]
 pub trait SmtpState: Send + Debug {
@@ -37,11 +40,13 @@ pub trait SmtpState: Send + Debug {
 }
 
 pub fn new_state() -> Box<dyn SmtpState + Send> {
-    Box::new(InitState)
+    Box::new(InitState::default())
 }
 
 #[derive(Default, Debug)]
-pub struct InitState;
+pub struct InitState {
+    validator: Arc<NoopValidator>,
+}
 #[async_trait]
 impl SmtpState for InitState {
     async fn process_line(
@@ -50,10 +55,18 @@ impl SmtpState for InitState {
         message: &mut Message,
     ) -> (Option<status::Code>, Option<Box<dyn SmtpState>>) {
         if line.starts_with(b"HELO") {
-            message.sender_domain = String::from_utf8_lossy(&line[5..]).trim().to_string();
+            let sender_domain = String::from_utf8_lossy(&line[5..]).trim().to_string();
+            if self.validator.valid(&sender_domain).await {
+                message.sender_domain = sender_domain;
+                return (Some(status::Code::Helo), Some(Box::new(MailState)));
+            }
+            // TODO: need to auth or starttls
             (Some(status::Code::Helo), Some(Box::new(MailState)))
         } else {
-            (Some(status::Code::BadSequence), Some(Box::new(InitState)))
+            (
+                Some(status::Code::BadSequence),
+                Some(Box::new(InitState::default())),
+            )
         }
     }
 }
@@ -146,7 +159,7 @@ mod tests {
     #[tokio::test]
     async fn test_init_state_helo() {
         let mut msg = Message::default();
-        let mut state = InitState {};
+        let mut state = InitState::default();
         let (resp, next) = state.process_line(b"HELO example.com", &mut msg).await;
         assert_eq!(resp, Some(status::Code::Helo));
         assert_eq!(msg.sender_domain, "example.com");
