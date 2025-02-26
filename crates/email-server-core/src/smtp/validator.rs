@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use trust_dns_resolver::{
+use hickory_resolver::{
     config::{ResolverConfig, ResolverOpts},
     TokioAsyncResolver,
 };
