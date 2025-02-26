@@ -5,17 +5,17 @@ use trust_dns_resolver::{
 };
 
 #[async_trait]
-pub trait HeloValidator {
+pub trait HeloValidator: Default {
     async fn valid(&self, _domain: &str) -> bool {
         true
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct NoopValidator;
 impl HeloValidator for NoopValidator {}
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct DomainNameValidator;
 #[async_trait]
 impl HeloValidator for DomainNameValidator {
