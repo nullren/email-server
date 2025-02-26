@@ -6,7 +6,7 @@ use hickory_resolver::{
 
 #[async_trait]
 pub trait HeloValidator: Send + Sync + std::fmt::Debug {
-    async fn valid(&self, _domain: &str) -> bool;
+    async fn valid(&self, domain: &str) -> bool;
 }
 
 #[derive(Debug, Default)]
