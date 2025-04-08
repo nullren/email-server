@@ -7,4 +7,4 @@ license.workspace = true
 [dependencies]
 clap = { version = "4.5.31", features = ["derive", "env"] }
 email-server-core = { path = "../email-server-core" }
-tokio = { version = "1.43.0", features = ["full"] }
+tokio = { version = "1.44.2", features = ["full"] }
